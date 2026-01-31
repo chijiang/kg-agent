@@ -2,7 +2,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
-from app.api import auth, config
+from app.api import auth, config, chat, graph
 
 app = FastAPI(title="Knowledge Graph QA API")
 
@@ -16,6 +16,8 @@ app.add_middleware(
 
 app.include_router(auth.router)
 app.include_router(config.router)
+app.include_router(chat.router)
+app.include_router(graph.router)
 
 
 @app.get("/health")
