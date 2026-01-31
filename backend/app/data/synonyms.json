@@ -1,0 +1,13 @@
+{
+  "PurchaseOrder": ["采购订单", "PO", "订单", "采购单"],
+  "PurchaseRequisition": ["采购申请", "PR", "请购单"],
+  "GoodsReceipt": ["收货单", "GR", "收货记录"],
+  "Supplier": ["供应商", "卖方", "供货商"],
+  "Material": ["物料", "材料", "产品"],
+  "BusinessPartner": ["业务伙伴", "BP", "合作伙伴"],
+  "SupplierInvoice": ["供应商发票", "发票", "供应商账单"],
+  "Payment": ["付款", "支付"],
+  "orderedFrom": ["订购自", "向...订购", "供应商为"],
+  "fulfills": ["完成", "履行", "实现"],
+  "billedFor": ["开票", "开票给"]
+}
