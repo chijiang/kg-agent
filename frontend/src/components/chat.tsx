@@ -3,11 +3,9 @@
 
 import { useState, useRef, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Card } from '@/components/ui/card'
 import { chatApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
-import { Send } from 'lucide-react'
+import { Send, Bot, User, Sparkles, ChevronDown, ChevronUp } from 'lucide-react'
 
 interface Message {
   role: 'user' | 'assistant'
@@ -21,6 +19,7 @@ export function Chat({ onGraphData }: { onGraphData: (data: any) => void }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [expandedThinking, setExpandedThinking] = useState<number | null>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   const scrollToBottom = () => {
@@ -109,55 +108,132 @@ export function Chat({ onGraphData }: { onGraphData: (data: any) => void }) {
     }
   }
 
+  const exampleQuestions = [
+    "PO_2024_001 是向哪个供应商订购的？",
+    "采购订单有哪些相关实体？",
+    "付款和订单之间有什么关系？"
+  ]
+
   return (
     <div className="flex flex-col h-full">
-      <div className="flex-1 overflow-y-auto space-y-4 mb-4">
+      <div className="flex-1 overflow-y-auto px-4 py-4 space-y-4">
         {messages.length === 0 && (
-          <div className="text-center text-gray-400 mt-20">
-            <p>开始提问吧！例如：</p>
-            <p className="mt-2">"PO_2024_001 是向哪个供应商订购的？"</p>
+          <div className="flex flex-col items-center justify-center h-full text-center px-4">
+            <div className="p-4 rounded-full bg-indigo-100 mb-4">
+              <Sparkles className="h-8 w-8 text-indigo-600" />
+            </div>
+            <h3 className="text-lg font-medium text-slate-700 mb-2">开始探索知识图谱</h3>
+            <p className="text-sm text-slate-500 mb-6">尝试以下问题：</p>
+            <div className="space-y-2 w-full max-w-md">
+              {exampleQuestions.map((q, i) => (
+                <button
+                  key={i}
+                  onClick={() => setInput(q)}
+                  className="w-full px-4 py-3 text-left text-sm bg-white hover:bg-indigo-50 border border-slate-200 rounded-xl transition-all hover:border-indigo-300 hover:shadow-sm"
+                >
+                  {q}
+                </button>
+              ))}
+            </div>
           </div>
         )}
+
         {messages.map((msg, i) => (
           <div
             key={i}
-            className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
+            className={`flex gap-3 ${msg.role === 'user' ? 'flex-row-reverse' : 'flex-row'}`}
           >
-            <Card
-              className={`max-w-[80%] p-3 ${msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
-                }`}
-            >
+            {/* Avatar */}
+            <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${msg.role === 'user' ? 'bg-indigo-600' : 'bg-emerald-600'
+              }`}>
+              {msg.role === 'user' ? (
+                <User className="h-4 w-4 text-white" />
+              ) : (
+                <Bot className="h-4 w-4 text-white" />
+              )}
+            </div>
+
+            {/* Message bubble */}
+            <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+              {/* Thinking panel */}
               {msg.thinking && (
-                <p className="text-xs text-gray-500 mb-2">💭 {msg.thinking}</p>
+                <button
+                  onClick={() => setExpandedThinking(expandedThinking === i ? null : i)}
+                  className="flex items-center gap-1 text-xs text-slate-500 mb-1 hover:text-indigo-600 transition-colors"
+                >
+                  <Sparkles className="h-3 w-3" />
+                  <span>思考过程</span>
+                  {expandedThinking === i ? (
+                    <ChevronUp className="h-3 w-3" />
+                  ) : (
+                    <ChevronDown className="h-3 w-3" />
+                  )}
+                </button>
               )}
-              <p className="whitespace-pre-wrap">{msg.content}</p>
+              {expandedThinking === i && msg.thinking && (
+                <div className="mb-2 px-3 py-2 text-xs text-slate-600 bg-slate-100 rounded-lg border-l-2 border-indigo-400">
+                  {msg.thinking}
+                </div>
+              )}
+
+              {/* Main content */}
+              <div className={`px-4 py-3 rounded-2xl ${msg.role === 'user'
+                  ? 'bg-indigo-600 text-white rounded-tr-md'
+                  : 'bg-slate-100 text-slate-700 rounded-tl-md'
+                }`}>
+                <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content || '...'}</p>
+              </div>
+
+              {/* Graph indicator */}
               {msg.graphData && (
-                <p className="text-xs text-green-600 mt-2">📊 相关图谱已显示</p>
+                <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs w-fit">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                  知识图谱已更新
+                </div>
               )}
-            </Card>
+            </div>
           </div>
         ))}
+
+        {/* Loading indicator */}
         {loading && (
-          <div className="flex justify-start">
-            <Card className="bg-gray-50 p-3">
-              <p className="text-gray-500">正在思考...</p>
-            </Card>
+          <div className="flex gap-3">
+            <div className="flex-shrink-0 w-8 h-8 rounded-full bg-emerald-600 flex items-center justify-center">
+              <Bot className="h-4 w-4 text-white" />
+            </div>
+            <div className="px-4 py-3 bg-slate-100 rounded-2xl rounded-tl-md">
+              <div className="flex gap-1">
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                <span className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+              </div>
+            </div>
           </div>
         )}
+
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="flex gap-2">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          placeholder="输入你的问题..."
-          disabled={loading}
-        />
-        <Button type="submit" disabled={loading || !input.trim()}>
-          <Send className="h-4 w-4" />
-        </Button>
-      </form>
+      {/* Input area */}
+      <div className="p-4 border-t border-slate-100 bg-white">
+        <form onSubmit={handleSubmit} className="flex gap-2">
+          <input
+            type="text"
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            placeholder="输入你的问题..."
+            disabled={loading}
+            className="flex-1 px-4 py-3 bg-slate-100 border-0 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all placeholder:text-slate-400"
+          />
+          <Button
+            type="submit"
+            disabled={loading || !input.trim()}
+            className="px-4 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl transition-all disabled:opacity-50"
+          >
+            <Send className="h-4 w-4" />
+          </Button>
+        </form>
+      </div>
     </div>
   )
 }
