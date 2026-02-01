@@ -85,12 +85,13 @@ export function Chat({ onGraphData }: { onGraphData: (data: any) => void }) {
                 return newMsgs
               })
             } else if (data.type === 'graph_data') {
-              onGraphData(data)
+              const graphData = { nodes: data.nodes || [], edges: data.edges || [] }
+              onGraphData(graphData)
               setMessages((prev) => {
                 const newMsgs = [...prev]
                 const last = newMsgs[newMsgs.length - 1]
                 if (last) {
-                  last.graphData = data
+                  last.graphData = graphData
                 }
                 return newMsgs
               })
@@ -123,9 +124,8 @@ export function Chat({ onGraphData }: { onGraphData: (data: any) => void }) {
             className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}
           >
             <Card
-              className={`max-w-[80%] p-3 ${
-                msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
-              }`}
+              className={`max-w-[80%] p-3 ${msg.role === 'user' ? 'bg-blue-50' : 'bg-gray-50'
+                }`}
             >
               {msg.thinking && (
                 <p className="text-xs text-gray-500 mb-2">💭 {msg.thinking}</p>
