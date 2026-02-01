@@ -54,6 +54,23 @@ export default function ImportPage() {
     }
   }
 
+  const handleClear = async () => {
+    if (!confirm('确定要清空当前图谱吗？此操作不可恢复。')) {
+      return
+    }
+
+    setLoading(true)
+    try {
+      await graphApi.clear()
+      setResult(null)
+      toast.success('图谱已清空')
+    } catch (err: any) {
+      toast.error(err.response?.data?.detail || '清空失败')
+    } finally {
+      setLoading(false)
+    }
+  }
+
   return (
     <AppLayout>
       <div className="max-w-2xl mx-auto">
@@ -85,7 +102,11 @@ export default function ImportPage() {
             </div>
 
             <Button onClick={handleImport} disabled={!file || loading} className="w-full">
-              {loading ? '导入中...' : '开始导入'}
+              {loading ? '处理中...' : '开始导入'}
+            </Button>
+
+            <Button onClick={handleClear} variant="outline" disabled={loading} className="w-full text-red-500 hover:text-red-600 hover:bg-red-50">
+              清空当前图谱
             </Button>
 
             {result && (

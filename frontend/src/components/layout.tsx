@@ -25,7 +25,7 @@ export function AppLayout({ children, noPadding = false }: { children: React.Rea
 
   return (
     <div className={`flex flex-col bg-gray-50 ${noPadding ? 'h-screen overflow-hidden' : 'min-h-screen'}`}>
-      <header className="bg-white border-b flex-shrink-0">
+      <header className="bg-white border-b flex-shrink-0 sticky top-0 z-50">
         <div className="w-full px-6 py-4 flex items-center justify-between">
           <h1 className="text-xl font-bold bg-indigo-600 bg-clip-text text-transparent">知识图谱问答</h1>
           <nav className="flex items-center gap-6">

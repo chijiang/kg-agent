@@ -116,4 +116,5 @@ export const graphApi = {
     api.get(`/graph/nodes?label=${encodeURIComponent(label)}&limit=${limit}`),
   getStatistics: (token: string) => api.get('/graph/statistics'),
   getSchema: (token: string) => api.get('/graph/schema'),
+  clear: () => api.post('/graph/clear'),
 }

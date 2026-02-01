@@ -121,7 +121,7 @@ export default function DashboardPage() {
                 <div className="p-2 rounded-lg bg-emerald-600">
                   <Network className="h-5 w-5 text-white" />
                 </div>
-                <h2 className="text-lg font-semibold text-white">知识图谱</h2>
+                <h2 className="text-lg font-semibold text-white">相关图谱预览</h2>
               </div>
               <div className="flex-1 min-h-0">
                 <GraphPreview data={graphData} />

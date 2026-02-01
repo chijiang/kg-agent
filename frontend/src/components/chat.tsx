@@ -248,7 +248,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
               {msg.graphData && (
                 <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-emerald-100 text-emerald-700 rounded-full text-xs w-fit">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                  知识图谱已更新
+                  预览图谱已更新
                 </div>
               )}
             </div>

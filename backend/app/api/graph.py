@@ -60,6 +60,33 @@ async def import_graph(
     }
 
 
+@router.post("/clear")
+async def clear_graph(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """清除全部图谱数据"""
+    result = await db.execute(
+        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
+    )
+    neo4j_config = result.scalar_one_or_none()
+    if not neo4j_config:
+        raise HTTPException(status_code=400, detail="Neo4j not configured")
+
+    driver = await get_neo4j_driver(
+        uri=decrypt_data(neo4j_config.uri_encrypted),
+        username=decrypt_data(neo4j_config.username_encrypted),
+        password=decrypt_data(neo4j_config.password_encrypted),
+        database=neo4j_config.database,
+    )
+
+    async with driver.session(database=neo4j_config.database) as session:
+        tools = GraphTools(session)
+        await tools.clear_graph()
+
+    return {"message": "Graph cleared successfully"}
+
+
 @router.get("/node/{uri:path}")
 async def get_node(
     uri: str,

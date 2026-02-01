@@ -15,6 +15,10 @@ class GraphTools:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def clear_graph(self):
+        """清除全部图谱数据"""
+        await self.session.run("MATCH (n) DETACH DELETE n")
+
     # ==================== Ontology 查询 ====================
 
     async def get_ontology_classes(self) -> List[dict]:

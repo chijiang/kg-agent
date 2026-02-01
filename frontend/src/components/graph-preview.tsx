@@ -130,7 +130,7 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
             'font-size': 11,
             'font-weight': 500,
             'text-wrap': 'ellipsis',
-            'text-max-width': 100,
+            'text-max-width': '100px',
             'border-width': 3,
             'border-color': '#1e293b',
             'transition-property': 'width, height, border-width, border-color',
@@ -174,7 +174,7 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
             'text-margin-y': -10,
             'text-background-color': '#1e293b',
             'text-background-opacity': 0.8,
-            'text-background-padding': 3,
+            'text-background-padding': '3px',
           },
         },
         {
@@ -393,8 +393,8 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
                       {selectedNode.connections.map((conn, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
                           <span className={`px-1.5 py-0.5 rounded ${conn.direction === 'out'
-                              ? 'bg-emerald-900 text-emerald-400'
-                              : 'bg-blue-900 text-blue-400'
+                            ? 'bg-emerald-900 text-emerald-400'
+                            : 'bg-blue-900 text-blue-400'
                             }`}>
                             {conn.direction === 'out' ? '→' : '←'}
                           </span>
