@@ -1,4 +1,4 @@
-?start: (action_def | rule_def)*
+start: (action_def | rule_def)*
 
 // ACTION Definition
 action_def: "ACTION" entity_action "{" precondition+ effect? "}"
@@ -19,8 +19,14 @@ priority: "PRIORITY" NUMBER
 
 trigger: "ON" trigger_type "(" trigger_target ")"
 
-trigger_type: "UPDATE" | "CREATE" | "DELETE" | "LINK" | "SCAN"
+trigger_type: UPDATE | CREATE | DELETE | LINK | SCAN
 trigger_target: CNAME ["." CNAME]
+
+UPDATE: "UPDATE"
+CREATE: "CREATE"
+DELETE: "DELETE"
+LINK: "LINK"
+SCAN: "SCAN"
 
 // Scope and Statements
 for_clause: "FOR" "(" binding ")" "{" statement* "}"
@@ -48,6 +54,7 @@ comparison: term [comp_op term]
     | term "MATCHES" STRING
     | term "CHANGED" ["FROM" value "TO" value]
     | "EXISTS" "(" pattern ")"
+    | term relationship term
 
 comp_op: "==" | "!=" | "<" | ">" | "<=" | ">="
 
@@ -64,7 +71,7 @@ value: STRING
     | "false"
     | "NULL"
 
-value_list: value ["," value]
+value_list: value ("," value)*
 
 // Pattern Matching for EXISTS
 pattern: CNAME [relationship CNAME] ["WHERE" expression]
@@ -88,3 +95,4 @@ CNAME: /[a-zA-Z_][a-zA-Z0-9_]*/
 
 %import common.WS
 %ignore WS
+%ignore /\/\/[^\n]*/
