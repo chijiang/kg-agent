@@ -1,9 +1,13 @@
 """Rule engine for reactive graph updates."""
 
-from typing import Any
+from typing import Any, TYPE_CHECKING
 from app.rule_engine.rule_registry import RuleRegistry
 from app.rule_engine.models import RuleDef, UpdateEvent, Trigger, ForClause
 from app.rule_engine.cypher_translator import CypherTranslator
+
+if TYPE_CHECKING:
+    from app.rule_engine.action_registry import ActionRegistry
+    from neo4j import AsyncDriver
 
 
 class RuleEngine:
@@ -13,13 +17,22 @@ class RuleEngine:
     triggers match the event. Rules are executed in priority order.
     """
 
-    def __init__(self, registry: RuleRegistry):
+    def __init__(
+        self,
+        action_registry: "ActionRegistry",
+        registry: RuleRegistry,
+        neo4j_driver: "AsyncDriver"
+    ):
         """Initialize the rule engine.
 
         Args:
+            action_registry: The action registry to use for executing actions
             registry: The rule registry to use
+            neo4j_driver: Neo4j driver for executing queries
         """
+        self.action_registry = action_registry
         self.registry = registry
+        self.neo4j_driver = neo4j_driver
         self.translator = CypherTranslator()
 
     def on_event(self, event: UpdateEvent) -> list[dict[str, Any]]:

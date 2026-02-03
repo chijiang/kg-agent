@@ -12,7 +12,9 @@ from app.rule_engine.action_registry import ActionRegistry
 from app.rule_engine.action_executor import ActionExecutor
 from app.rule_engine.rule_registry import RuleRegistry
 from app.rule_engine.rule_engine import RuleEngine
+from app.rule_engine.event_emitter import GraphEventEmitter
 from app.services.rule_storage import RuleStorage
+from app.core.neo4j_pool import get_neo4j_driver
 
 app = FastAPI(title="Knowledge Graph QA API")
 
@@ -34,7 +36,22 @@ async def startup():
     action_registry = ActionRegistry()
     action_executor = ActionExecutor(action_registry)
     rule_registry = RuleRegistry()
-    rule_engine = RuleEngine(rule_registry)
+
+    # Get Neo4j driver for rule engine
+    neo4j_driver = await get_neo4j_driver(
+        uri=settings.NEO4J_URI,
+        username=settings.NEO4J_USERNAME,
+        password=settings.NEO4J_PASSWORD
+    )
+
+    # Create event emitter
+    event_emitter = GraphEventEmitter()
+
+    # Create RuleEngine with all dependencies
+    rule_engine = RuleEngine(action_registry, rule_registry, neo4j_driver)
+
+    # Connect event emitter to rule engine
+    event_emitter.subscribe(rule_engine.on_event)
 
     # Initialize rule storage
     rules_dir = Path(__file__).parent.parent / "rules"
@@ -61,6 +78,8 @@ async def startup():
     app.state.rule_registry = rule_registry
     app.state.rule_engine = rule_engine
     app.state.rule_storage = rule_storage
+    app.state.neo4j_driver = neo4j_driver
+    app.state.event_emitter = event_emitter
 
 
 app.include_router(auth.router)

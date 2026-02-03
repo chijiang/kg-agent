@@ -1,5 +1,5 @@
 # backend/app/api/graph.py
-from fastapi import APIRouter, Depends, File, UploadFile, HTTPException
+from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -9,6 +9,7 @@ from app.models.user import User
 from app.models.neo4j_config import Neo4jConfig
 from app.core.neo4j_pool import get_neo4j_driver
 from app.services.graph_tools import GraphTools
+from app.rule_engine.event_emitter import GraphEventEmitter
 from fastapi.responses import JSONResponse
 
 router = APIRouter(prefix="/graph", tags=["graph"])
@@ -310,3 +311,36 @@ async def get_schema(
                 raise HTTPException(
                     status_code=503, detail=f"Neo4j connection failed: {str(e)}"
                 )
+
+
+@router.put("/entities/{entity_type}/{entity_id}")
+async def update_entity(
+    entity_type: str,
+    entity_id: str,
+    updates: dict,
+    request: Request,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """Update an entity and emit events for rule engine."""
+    result = await db.execute(
+        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
+    )
+    neo4j_config = result.scalar_one_or_none()
+    if not neo4j_config:
+        raise HTTPException(status_code=400, detail="Neo4j not configured")
+
+    driver = await get_neo4j_driver(
+        uri=decrypt_data(neo4j_config.uri_encrypted),
+        username=decrypt_data(neo4j_config.username_encrypted),
+        password=decrypt_data(neo4j_config.password_encrypted),
+        database=neo4j_config.database,
+    )
+
+    # Get event emitter from app state
+    event_emitter: GraphEventEmitter = request.app.state.event_emitter
+
+    async with driver.session(database=neo4j_config.database) as session:
+        tools = GraphTools(session, event_emitter=event_emitter)
+        result = await tools.update_entity(entity_type, entity_id, updates)
+        return result

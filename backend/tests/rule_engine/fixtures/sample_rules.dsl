@@ -4,6 +4,9 @@ RULE SupplierStatusBlocking PRIORITY 100 {
     FOR (s: Supplier WHERE s.status IN ["Expired", "Blacklisted", "Suspended"]) {
         FOR (po: PurchaseOrder WHERE po -[orderedFrom]-> s AND po.status == "Open") {
             SET po.status = "RiskLocked";
+            FOR (pr: PurchaseRequisition WHERE pr -[createdFrom]-> po AND pr.status == "Open") {
+                SET pr.status = "RiskLocked";
+            }
         }
     }
 }

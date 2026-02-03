@@ -24,6 +24,43 @@ class GraphTools:
         """清除全部图谱数据"""
         await self.session.run("MATCH (n) DETACH DELETE n")
 
+    async def update_entity(
+        self,
+        entity_type: str,
+        entity_id: str,
+        updates: dict[str, Any]
+    ) -> dict[str, Any]:
+        """Update an entity and emit events for rule engine.
+
+        Args:
+            entity_type: Entity type/label
+            entity_id: Entity ID (name property)
+            updates: Properties to update
+
+        Returns:
+            Updated entity data
+        """
+        # 1. Get old values
+        old = await self._get_entity_raw(entity_type, entity_id)
+
+        # 2. Execute update
+        set_clause = ", ".join([f"n.{k} = ${k}" for k in updates.keys()])
+        query = f"MATCH (n:`{entity_type}` {{name: $id}}) SET {set_clause} RETURN n"
+        result = await self.session.run(query, id=entity_id, **updates)
+        record = await result.single()
+        updated = record["n"] if record else None
+
+        # 3. Emit events for changed properties
+        if old and updated:
+            for key, new_val in updates.items():
+                old_val = old.get(key)
+                if old_val != new_val:
+                    await self._emit_update_event(
+                        entity_type, entity_id, key, old_val, new_val
+                    )
+
+        return updated if updated else {}
+
     # ==================== Event Emission ====================
 
     async def _get_entity_raw(
