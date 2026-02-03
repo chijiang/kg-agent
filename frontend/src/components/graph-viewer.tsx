@@ -277,15 +277,15 @@ export function GraphViewer() {
         }
 
         // Add edges
-        n.relationships?.forEach((rel: string, i: number) => {
-          const edgeId = `${nodeName}-${n.name}-${i}`
+        n.relationships?.forEach((rel: any, i: number) => {
+          const edgeId = typeof rel === 'object' ? `${rel.source}-${rel.target}-${i}` : `${nodeName}-${n.name}-${i}`
           if (!cyRef.current?.getElementById(edgeId).length) {
             newElements.push({
               data: {
                 id: edgeId,
-                source: nodeName,
-                target: n.name,
-                label: rel,
+                source: typeof rel === 'object' ? rel.source : nodeName,
+                target: typeof rel === 'object' ? rel.target : n.name,
+                label: typeof rel === 'object' ? rel.type : rel,
               },
             })
           }

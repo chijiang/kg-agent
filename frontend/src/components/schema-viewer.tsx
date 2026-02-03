@@ -28,7 +28,11 @@ interface SchemaData {
     relationships: SchemaRelationship[]
 }
 
-export function SchemaViewer() {
+interface SchemaViewerProps {
+    onNodeSelect?: (node: SchemaNode | null) => void
+}
+
+export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const cyRef = useRef<Core | null>(null)
     const token = useAuthStore((state) => state.token)
@@ -98,15 +102,19 @@ export function SchemaViewer() {
 
         cyRef.current.on('tap', 'node', (evt) => {
             const node = evt.target
-            setSelectedNode({
+            const nodeData = {
                 name: node.data('label'),
+                label: node.data('label'),
                 dataProperties: node.data('dataProperties'),
-            })
+            }
+            setSelectedNode(nodeData)
+            onNodeSelect?.(nodeData)
         })
 
         cyRef.current.on('tap', (evt) => {
             if (evt.target === cyRef.current) {
                 setSelectedNode(null)
+                onNodeSelect?.(null)
             }
         })
 
@@ -229,22 +237,7 @@ export function SchemaViewer() {
                 </div>
             )}
 
-            {/* 节点详情 */}
-            {selectedNode && (
-                <div className="absolute top-4 right-4 bg-white p-4 rounded-lg shadow-lg max-w-xs">
-                    <h3 className="font-semibold text-lg mb-2">{selectedNode.name}</h3>
-                    {selectedNode.dataProperties && selectedNode.dataProperties.length > 0 && (
-                        <div>
-                            <div className="text-sm text-gray-500 mb-1">属性：</div>
-                            <ul className="text-sm">
-                                {selectedNode.dataProperties.map((prop: string, i: number) => (
-                                    <li key={i} className="text-gray-700">• {prop}</li>
-                                ))}
-                            </ul>
-                        </div>
-                    )}
-                </div>
-            )}
+
         </div>
     )
 }

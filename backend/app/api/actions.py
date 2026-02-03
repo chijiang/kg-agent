@@ -66,8 +66,12 @@ class ActionExecutionRequest(BaseModel):
     """Request model for executing an action."""
 
     entity_id: str = Field(..., description="ID of the entity to execute action on")
-    entity_data: dict[str, Any] = Field(default_factory=dict, description="Current entity data")
-    params: dict[str, Any] = Field(default_factory=dict, description="Action parameters")
+    entity_data: dict[str, Any] = Field(
+        default_factory=dict, description="Current entity data"
+    )
+    params: dict[str, Any] = Field(
+        default_factory=dict, description="Action parameters"
+    )
 
 
 class ActionUploadRequest(BaseModel):
@@ -123,16 +127,10 @@ async def execute_action(
     """
     # Create evaluation context
     # Build entity dict with id and data
-    entity = {
-        "id": request.entity_id,
-        **request.entity_data
-    }
+    entity = {"id": request.entity_id, **request.entity_data}
 
     context = EvaluationContext(
-        entity=entity,
-        old_values={},
-        session=None,
-        variables=request.params
+        entity=entity, old_values={}, session=None, variables=request.params
     )
 
     # Execute the action
@@ -144,11 +142,11 @@ async def execute_action(
     return {
         "success": True,
         "changes": result.changes,
-        "message": f"Action {entity_type}.{action_name} executed successfully"
+        "message": f"Action {entity_type}.{action_name} executed successfully",
     }
 
 
-@router.post("/")
+@router.post("")
 async def upload_action(
     request: ActionUploadRequest,
     current_user: User = Depends(get_current_user),
@@ -174,8 +172,7 @@ async def upload_action(
     # Check if action already exists
     if await repo.exists(request.name):
         raise HTTPException(
-            status_code=400,
-            detail=f"Action '{request.name}' already exists"
+            status_code=400, detail=f"Action '{request.name}' already exists"
         )
 
     try:
@@ -186,8 +183,7 @@ async def upload_action(
 
         if not action_defs:
             raise HTTPException(
-                status_code=400,
-                detail="No valid ACTION definition found in content"
+                status_code=400, detail="No valid ACTION definition found in content"
             )
 
         # Save to database
@@ -195,7 +191,7 @@ async def upload_action(
             name=request.name,
             entity_type=request.entity_type,
             dsl_content=request.dsl_content,
-            is_active=request.is_active
+            is_active=request.is_active,
         )
 
         # Load and register in memory
@@ -212,8 +208,8 @@ async def upload_action(
                 "id": action.id,
                 "name": action.name,
                 "entity_type": action.entity_type,
-                "is_active": action.is_active
-            }
+                "is_active": action.is_active,
+            },
         }
 
     except ValueError as e:
@@ -223,10 +219,12 @@ async def upload_action(
         error_type = type(e).__name__
         if "Unexpected" in error_type or "Visit" in error_type:
             raise HTTPException(status_code=400, detail=f"Invalid DSL: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Failed to upload action: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to upload action: {str(e)}"
+        )
 
 
-@router.get("/")
+@router.get("")
 async def list_actions(
     current_user: User = Depends(get_current_user),
     registry: ActionRegistry = Depends(get_action_registry),
@@ -244,25 +242,20 @@ async def list_actions(
 
     action_infos = []
     for action in actions:
-        action_infos.append(ActionInfo(
-            entity_type=action.entity_type,
-            action_name=action.action_name,
-            parameters=[
-                {
-                    "name": p.name,
-                    "type": p.param_type,
-                    "optional": p.optional
-                }
-                for p in (action.parameters or [])
-            ],
-            precondition_count=len(action.preconditions or []),
-            has_effect=action.effect is not None
-        ))
+        action_infos.append(
+            ActionInfo(
+                entity_type=action.entity_type,
+                action_name=action.action_name,
+                parameters=[
+                    {"name": p.name, "type": p.param_type, "optional": p.optional}
+                    for p in (action.parameters or [])
+                ],
+                precondition_count=len(action.preconditions or []),
+                has_effect=action.effect is not None,
+            )
+        )
 
-    return {
-        "actions": action_infos,
-        "count": len(action_infos)
-    }
+    return {"actions": action_infos, "count": len(action_infos)}
 
 
 @router.get("/definitions")
@@ -290,11 +283,11 @@ async def list_action_definitions(
                 "entity_type": action.entity_type,
                 "is_active": action.is_active,
                 "created_at": action.created_at.isoformat(),
-                "updated_at": action.updated_at.isoformat()
+                "updated_at": action.updated_at.isoformat(),
             }
             for action in actions
         ],
-        "count": len(actions)
+        "count": len(actions),
     }
 
 
@@ -330,8 +323,87 @@ async def get_action_definition(
         "dsl_content": action.dsl_content,
         "is_active": action.is_active,
         "created_at": action.created_at.isoformat(),
-        "updated_at": action.updated_at.isoformat()
+        "updated_at": action.updated_at.isoformat(),
     }
+
+
+class ActionUpdateRequest(BaseModel):
+    """Request model for updating an action definition."""
+
+    dsl_content: str = Field(..., description="DSL content of the action")
+    is_active: bool = Field(default=True, description="Whether the action is active")
+
+
+@router.put("/definitions/{name}")
+async def update_action_definition(
+    name: str,
+    request: ActionUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    registry: ActionRegistry = Depends(get_action_registry),
+) -> dict[str, Any]:
+    """Update an existing action definition.
+
+    Args:
+        name: Action name
+        request: Action update request
+        current_user: Current authenticated user
+        db: Database session
+        registry: Action registry instance
+
+    Returns:
+        Updated action details
+
+    Raises:
+        HTTPException: If action is not found or parsing fails
+    """
+    repo = ActionDefinitionRepository(db)
+
+    # Check if action exists
+    existing = await repo.get_by_name(name)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Action '{name}' not found")
+
+    try:
+        # Validate by parsing
+        parser = RuleParser()
+        parsed = parser.parse(request.dsl_content)
+        action_defs = [item for item in parsed if isinstance(item, ActionDef)]
+
+        if not action_defs:
+            raise HTTPException(
+                status_code=400, detail="No valid ACTION definition found in content"
+            )
+
+        # Update in database
+        action = await repo.update(
+            name=name, dsl_content=request.dsl_content, is_active=request.is_active
+        )
+
+        # Re-register in the in-memory registry
+        for action_def in action_defs:
+            registry.register(action_def)  # This will overwrite existing
+
+        return {
+            "message": "Action updated successfully",
+            "action": {
+                "id": action.id,
+                "name": action.name,
+                "entity_type": action.entity_type,
+                "is_active": action.is_active,
+            },
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Check if it's a parsing error from Lark
+        error_type = type(e).__name__
+        if "Unexpected" in error_type or "Visit" in error_type:
+            raise HTTPException(status_code=400, detail=f"Invalid DSL: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Failed to update action: {str(e)}"
+        )
 
 
 @router.delete("/definitions/{name}")
@@ -360,9 +432,7 @@ async def delete_action_definition(
 
     await repo.delete(name)
 
-    return {
-        "message": f"Action '{name}' deleted successfully"
-    }
+    return {"message": f"Action '{name}' deleted successfully"}
 
 
 @router.get("/{entity_type}")
@@ -385,23 +455,21 @@ async def list_entity_actions(
 
     action_infos = []
     for action in actions:
-        action_infos.append(ActionInfo(
-            entity_type=action.entity_type,
-            action_name=action.action_name,
-            parameters=[
-                {
-                    "name": p.name,
-                    "type": p.param_type,
-                    "optional": p.optional
-                }
-                for p in (action.parameters or [])
-            ],
-            precondition_count=len(action.preconditions or []),
-            has_effect=action.effect is not None
-        ))
+        action_infos.append(
+            ActionInfo(
+                entity_type=action.entity_type,
+                action_name=action.action_name,
+                parameters=[
+                    {"name": p.name, "type": p.param_type, "optional": p.optional}
+                    for p in (action.parameters or [])
+                ],
+                precondition_count=len(action.preconditions or []),
+                has_effect=action.effect is not None,
+            )
+        )
 
     return {
         "entity_type": entity_type,
         "actions": action_infos,
-        "count": len(action_infos)
+        "count": len(action_infos),
     }

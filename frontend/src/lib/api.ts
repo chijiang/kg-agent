@@ -117,4 +117,85 @@ export const graphApi = {
   getStatistics: (token: string) => api.get('/graph/statistics'),
   getSchema: (token: string) => api.get('/graph/schema'),
   clear: () => api.post('/graph/clear'),
+
+  // 搜索实例
+  searchInstances: (className: string, keyword: string, filters: Record<string, any>, limit: number, token: string) =>
+    api.get('/graph/instances/search', {
+      params: { class_name: className, keyword, limit, ...filters }
+    }),
+
+  // 更新实体属性
+  updateEntity: (entityType: string, entityId: string, updates: Record<string, any>, token: string) =>
+    api.put(`/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, updates),
 }
+
+// Rule and Action Types
+export interface RuleInfo {
+  id: number
+  name: string
+  priority: number
+  trigger: {
+    type: string
+    entity: string
+    property: string | null
+  }
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RuleDetail extends RuleInfo {
+  dsl_content: string
+}
+
+export interface ActionInfo {
+  id: number
+  name: string
+  entity_type: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface ActionDetail extends ActionInfo {
+  dsl_content: string
+}
+
+export const rulesApi = {
+  list: () => api.get<{ rules: RuleInfo[]; count: number }>('/api/rules/'),
+
+  get: (name: string) =>
+    api.get<RuleDetail>(`/api/rules/${encodeURIComponent(name)}`),
+
+  create: (data: { name: string; dsl_content: string; priority?: number; is_active?: boolean }) =>
+    api.post('/api/rules', data),
+
+  update: (name: string, data: { dsl_content: string; priority?: number; is_active?: boolean }) =>
+    api.put(`/api/rules/${encodeURIComponent(name)}`, data),
+
+  delete: (name: string) =>
+    api.delete(`/api/rules/${encodeURIComponent(name)}`),
+
+  validate: (dsl_content: string) =>
+    api.post('/api/rules', { name: '__validate__', dsl_content }).catch((e) => {
+      // Extract validation error from response
+      throw e
+    }),
+}
+
+export const actionsApi = {
+  list: () => api.get<{ actions: ActionInfo[]; count: number }>('/api/actions/definitions/'),
+
+  get: (name: string) =>
+    api.get<ActionDetail>(`/api/actions/definitions/${encodeURIComponent(name)}`),
+
+  create: (data: { name: string; entity_type: string; dsl_content: string; is_active?: boolean }) =>
+    api.post('/api/actions', data),
+
+  update: (name: string, data: { dsl_content: string; is_active?: boolean }) =>
+    api.put(`/api/actions/definitions/${encodeURIComponent(name)}`, data),
+
+  delete: (name: string) =>
+    api.delete(`/api/actions/definitions/${encodeURIComponent(name)}`),
+}
+

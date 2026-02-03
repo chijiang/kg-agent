@@ -11,17 +11,20 @@ _drivers: dict[str, AsyncDriver] = {}
 
 
 async def get_neo4j_driver(
-    uri: str,
-    username: str,
-    password: str,
+    uri: Optional[str] = None,
+    username: Optional[str] = None,
+    password: Optional[str] = None,
     database: str = "neo4j",
     force_new: bool = False,
-) -> AsyncDriver:
+) -> Optional[AsyncDriver]:
     """获取 Neo4j Driver（使用连接池，按 URI 缓存）
 
     Args:
         force_new: 如果为 True，强制创建新连接（用于连接失败后重试）
     """
+    if not uri:
+        logger.warning("Neo4j URI is empty, skipping driver initialization.")
+        return None
     global _drivers
 
     cache_key = f"{uri}:{username}"
@@ -43,6 +46,20 @@ async def get_neo4j_driver(
             max_connection_pool_size=10,
             connection_acquisition_timeout=30,
         )
+    else:
+        # Check if driver is closed and recreate if necessary
+        try:
+            # neo4j drivers have a private _closed attribute
+            if hasattr(_drivers[cache_key], "_closed") and _drivers[cache_key]._closed:
+                _drivers[cache_key] = AsyncGraphDatabase.driver(
+                    uri,
+                    auth=(username, password),
+                    max_connection_lifetime=60,
+                    max_connection_pool_size=10,
+                    connection_acquisition_timeout=30,
+                )
+        except Exception:
+            pass
 
     return _drivers[cache_key]
 

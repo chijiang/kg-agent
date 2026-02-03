@@ -23,9 +23,7 @@ async def import_graph(
 ):
     """导入 OWL 文件"""
     # 获取 Neo4j 配置
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -67,9 +65,7 @@ async def clear_graph(
     db: AsyncSession = Depends(get_db),
 ):
     """清除全部图谱数据"""
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -96,9 +92,7 @@ async def get_node(
 ):
     """获取节点详情"""
     # 获取配置
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -111,7 +105,10 @@ async def get_node(
     )
 
     async with driver.session(database=neo4j_config.database) as session:
-        record = await session.run("MATCH (n {uri: $uri}) RETURN n", uri=uri)
+        # 首先尝试按 name 查找，然后按 uri 查找
+        record = await session.run(
+            "MATCH (n) WHERE n.name = $name OR n.uri = $name RETURN n LIMIT 1", name=uri
+        )
         data = await record.data()
         if not data:
             raise HTTPException(status_code=404, detail="Node not found")
@@ -126,9 +123,7 @@ async def get_neighbors(
     db: AsyncSession = Depends(get_db),
 ):
     """获取节点邻居"""
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -155,9 +150,7 @@ async def find_path(
     db: AsyncSession = Depends(get_db),
 ):
     """查找路径"""
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -183,9 +176,7 @@ async def get_statistics(
     from neo4j.exceptions import ServiceUnavailable, SessionExpired
     from app.core.neo4j_pool import invalidate_driver
 
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -229,9 +220,7 @@ async def get_nodes_by_label(
     db: AsyncSession = Depends(get_db),
 ):
     """根据标签获取节点"""
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -258,9 +247,7 @@ async def get_schema(
     from neo4j.exceptions import ServiceUnavailable, SessionExpired
     from app.core.neo4j_pool import invalidate_driver
 
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")
@@ -313,6 +300,59 @@ async def get_schema(
                 )
 
 
+@router.get("/instances/search")
+async def search_instances(
+    class_name: str,
+    keyword: str = "",
+    limit: int = 50,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """搜索实例，支持类名、关键词和属性过滤"""
+    result = await db.execute(select(Neo4jConfig).limit(1))
+    neo4j_config = result.scalar_one_or_none()
+    if not neo4j_config:
+        raise HTTPException(status_code=400, detail="Neo4j not configured")
+
+    driver = await get_neo4j_driver(
+        uri=decrypt_data(neo4j_config.uri_encrypted),
+        username=decrypt_data(neo4j_config.username_encrypted),
+        password=decrypt_data(neo4j_config.password_encrypted),
+        database=neo4j_config.database,
+    )
+
+    async with driver.session(database=neo4j_config.database) as session:
+        # 构建查询
+        conditions = ["n.__is_instance = true"]
+        params = {"limit": limit}
+
+        if keyword:
+            conditions.append("n.name CONTAINS $keyword")
+            params["keyword"] = keyword
+
+        where_clause = " AND ".join(conditions)
+
+        query = f"""
+            MATCH (n:`{class_name}`)
+            WHERE {where_clause}
+            RETURN n.name AS name, properties(n) AS properties
+            LIMIT $limit
+        """
+
+        result = await session.run(query, **params)
+        data = await result.data()
+
+        # 清理属性
+        for item in data:
+            if "properties" in item:
+                props = item["properties"]
+                item["properties"] = {
+                    k: v for k, v in props.items() if not k.startswith("__")
+                }
+
+        return data
+
+
 @router.put("/entities/{entity_type}/{entity_id}")
 async def update_entity(
     entity_type: str,
@@ -323,9 +363,7 @@ async def update_entity(
     db: AsyncSession = Depends(get_db),
 ):
     """Update an entity and emit events for rule engine."""
-    result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")

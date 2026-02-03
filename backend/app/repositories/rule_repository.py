@@ -281,6 +281,9 @@ class RuleRepository:
         self,
         name: str,
         dsl_content: Optional[str] = None,
+        trigger_type: Optional[str] = None,
+        trigger_entity: Optional[str] = None,
+        trigger_property: Optional[str] = None,
         priority: Optional[int] = None,
         is_active: Optional[bool] = None
     ) -> Optional[Rule]:
@@ -289,6 +292,9 @@ class RuleRepository:
         Args:
             name: Rule name to update
             dsl_content: New DSL content (optional)
+            trigger_type: New trigger type (optional)
+            trigger_entity: New trigger entity (optional)
+            trigger_property: New trigger property (optional)
             priority: New priority (optional)
             is_active: New active status (optional)
 
@@ -301,6 +307,12 @@ class RuleRepository:
 
         if dsl_content is not None:
             rule.dsl_content = dsl_content
+        if trigger_type is not None:
+            rule.trigger_type = trigger_type
+        if trigger_entity is not None:
+            rule.trigger_entity = trigger_entity
+        if trigger_property is not None:
+            rule.trigger_property = trigger_property
         if priority is not None:
             rule.priority = priority
         if is_active is not None:

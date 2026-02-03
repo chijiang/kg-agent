@@ -183,10 +183,8 @@ async def generate_title(
     if not conversation.messages:
         return {"title": conversation.title}
 
-    # 获取 LLM 配置
-    llm_result = await db.execute(
-        select(LLMConfig).where(LLMConfig.user_id == current_user.id)
-    )
+    # 获取 LLM 配置（全局配置）
+    llm_result = await db.execute(select(LLMConfig).limit(1))
     llm_config = llm_result.scalar_one_or_none()
     if not llm_config:
         raise HTTPException(status_code=400, detail="LLM not configured")

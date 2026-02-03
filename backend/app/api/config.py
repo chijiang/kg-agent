@@ -1,5 +1,5 @@
-# backend/app/api/config.py
-from fastapi import APIRouter, Depends, HTTPException
+from datetime import datetime
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.core.database import get_db
@@ -24,7 +24,7 @@ async def get_llm_config(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(LLMConfig).where(LLMConfig.user_id == current_user.id))
+    result = await db.execute(select(LLMConfig).limit(1))
     config = result.scalar_one_or_none()
 
     if not config:
@@ -43,7 +43,7 @@ async def update_llm_config(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(LLMConfig).where(LLMConfig.user_id == current_user.id))
+    result = await db.execute(select(LLMConfig).limit(1))
     config = result.scalar_one_or_none()
 
     if config:
@@ -51,12 +51,12 @@ async def update_llm_config(
             config.api_key_encrypted = encrypt_data(req.api_key)
         config.base_url = req.base_url
         config.model = req.model
+        config.updated_at = datetime.utcnow()
     else:
         if req.api_key == "************":
             raise HTTPException(status_code=400, detail="Cannot use placeholder for new configuration")
         encrypted_key = encrypt_data(req.api_key)
         config = LLMConfig(
-            user_id=current_user.id,
             api_key_encrypted=encrypted_key,
             base_url=req.base_url,
             model=req.model
@@ -76,7 +76,7 @@ async def test_llm_connection(
     try:
         api_key = req.api_key
         if api_key == "************":
-            result = await db.execute(select(LLMConfig).where(LLMConfig.user_id == current_user.id))
+            result = await db.execute(select(LLMConfig).limit(1))
             config = result.scalar_one_or_none()
             if not config:
                 return TestConnectionResponse(success=False, message="No saved API key found")
@@ -99,7 +99,7 @@ async def get_neo4j_config(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id))
+    result = await db.execute(select(Neo4jConfig).limit(1))
     config = result.scalar_one_or_none()
 
     if not config:
@@ -116,10 +116,11 @@ async def get_neo4j_config(
 @router.put("/neo4j")
 async def update_neo4j_config(
     req: Neo4jConfigRequest,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    result = await db.execute(select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id))
+    result = await db.execute(select(Neo4jConfig).limit(1))
     config = result.scalar_one_or_none()
 
     if config:
@@ -128,11 +129,11 @@ async def update_neo4j_config(
         if req.password != "************":
             config.password_encrypted = encrypt_data(req.password)
         config.database = req.database
+        config.updated_at = datetime.utcnow()
     else:
         if req.password == "************":
             raise HTTPException(status_code=400, detail="Cannot use placeholder for new configuration")
         config = Neo4jConfig(
-            user_id=current_user.id,
             uri_encrypted=encrypt_data(req.uri),
             username_encrypted=encrypt_data(req.username),
             password_encrypted=encrypt_data(req.password),
@@ -141,6 +142,27 @@ async def update_neo4j_config(
         db.add(config)
 
     await db.commit()
+
+    # Refresh driver in app state
+    password = req.password
+    if password == "************":
+        password = decrypt_data(config.password_encrypted)
+
+    try:
+        new_driver = await get_neo4j_driver(
+            uri=req.uri,
+            username=req.username,
+            password=password,
+            database=req.database,
+            force_new=True
+        )
+        request.app.state.neo4j_driver = new_driver
+        if hasattr(request.app.state, 'rule_engine'):
+            request.app.state.rule_engine.neo4j_driver = new_driver
+    except Exception as e:
+        # We still commit the config, but warn that the driver refresh failed
+        return {"message": f"Neo4j config updated, but failed to refresh driver: {e}"}
+
     return {"message": "Neo4j config updated"}
 
 
@@ -153,7 +175,7 @@ async def test_neo4j_connection(
     try:
         password = req.password
         if password == "************":
-            result = await db.execute(select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id))
+            result = await db.execute(select(Neo4jConfig).limit(1))
             config = result.scalar_one_or_none()
             if not config:
                 return TestConnectionResponse(success=False, message="No saved password found")

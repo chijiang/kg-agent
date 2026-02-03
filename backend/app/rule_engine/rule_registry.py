@@ -110,6 +110,58 @@ class RuleRegistry:
         self._rules.clear()
         self._trigger_index.clear()
 
+    def unregister(self, rule_name: str) -> bool:
+        """Unregister a rule by name.
+
+        Args:
+            rule_name: The name of the rule to unregister
+
+        Returns:
+            True if the rule was unregistered, False if not found
+        """
+        if rule_name not in self._rules:
+            return False
+
+        rule = self._rules.pop(rule_name)
+
+        # Remove from trigger index
+        trigger_key = self._make_trigger_key(rule.trigger)
+        if trigger_key in self._trigger_index:
+            if rule_name in self._trigger_index[trigger_key]:
+                self._trigger_index[trigger_key].remove(rule_name)
+
+        return True
+
+    def load_from_dsl(self, dsl_content: str) -> list[RuleDef]:
+        """Load rules from a DSL string.
+
+        Args:
+            dsl_content: DSL content as a string
+
+        Returns:
+            List of loaded rule definitions
+
+        Raises:
+            ValueError: If parsing fails
+        """
+        from app.rule_engine.parser import RuleParser
+
+        parser = RuleParser()
+        parsed = parser.parse(dsl_content)
+
+        # Filter only RuleDef objects (exclude ActionDef)
+        rules = [item for item in parsed if isinstance(item, RuleDef)]
+
+        # Register each rule
+        for rule in rules:
+            try:
+                self.register(rule)
+            except ValueError:
+                # Rule already registered, skip
+                pass
+
+        return rules
+
     def _make_trigger_key(self, trigger: Trigger) -> str:
         """Create a key for trigger indexing.
 

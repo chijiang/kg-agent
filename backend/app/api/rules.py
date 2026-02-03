@@ -80,7 +80,7 @@ class MigrationResponse(BaseModel):
     errors: list[str]
 
 
-@router.get("/")
+@router.get("")
 async def list_rules(
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -159,7 +159,7 @@ async def get_rule(
     }
 
 
-@router.post("/")
+@router.post("")
 async def upload_rule(
     request: RuleUploadRequest,
     current_user: User = Depends(get_current_user),
@@ -249,6 +249,115 @@ async def upload_rule(
         if "Unexpected" in error_type or "Visit" in error_type:
             raise HTTPException(status_code=400, detail=f"Invalid DSL: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to upload rule: {str(e)}")
+
+
+class RuleUpdateRequest(BaseModel):
+    """Request model for updating a rule."""
+
+    dsl_content: str = Field(..., description="DSL content of the rule")
+    priority: int = Field(default=0, description="Rule priority")
+    is_active: bool = Field(default=True, description="Whether the rule is active")
+
+
+@router.put("/{name}")
+async def update_rule(
+    name: str,
+    request: RuleUpdateRequest,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+    registry: RuleRegistry = Depends(get_rule_registry),
+) -> dict[str, Any]:
+    """Update an existing rule.
+
+    Args:
+        name: Rule name
+        request: Rule update request
+        current_user: Current authenticated user
+        db: Database session
+        registry: Rule registry instance
+
+    Returns:
+        Updated rule details
+
+    Raises:
+        HTTPException: If rule is not found or parsing fails
+    """
+    repo = RuleRepository(db)
+
+    # Check if rule exists
+    existing = await repo.get_by_name(name)
+    if existing is None:
+        raise HTTPException(status_code=404, detail=f"Rule '{name}' not found")
+
+    try:
+        # Validate by parsing
+        parser = RuleParser()
+        parsed = parser.parse(request.dsl_content)
+        rule_defs = [item for item in parsed if isinstance(item, RuleDef)]
+
+        if not rule_defs:
+            raise HTTPException(
+                status_code=400,
+                detail="No valid RULE definition found in content"
+            )
+
+        rule_def = rule_defs[0]
+
+        # Extract trigger information
+        trigger_type = rule_def.trigger.type.value
+        trigger_entity = rule_def.trigger.entity_type
+        trigger_property = rule_def.trigger.property
+
+        # Update in database
+        rule = await repo.update(
+            name=name,
+            dsl_content=request.dsl_content,
+            trigger_type=trigger_type,
+            trigger_entity=trigger_entity,
+            trigger_property=trigger_property,
+            priority=request.priority,
+            is_active=request.is_active
+        )
+
+        # Re-register in the in-memory registry
+        # First remove the old registration if it exists
+        if name in registry:
+            registry.clear()
+            # Reload all active rules from database
+            all_rules = await repo.list_active()
+            for db_rule in all_rules:
+                try:
+                    rule_parsed = parser.parse(db_rule.dsl_content)
+                    for item in rule_parsed:
+                        if isinstance(item, RuleDef):
+                            registry.register(item)
+                            break
+                except Exception:
+                    pass  # Skip rules with parse errors
+
+        return {
+            "message": "Rule updated successfully",
+            "rule": {
+                "id": rule.id,
+                "name": rule.name,
+                "priority": rule.priority,
+                "trigger": {
+                    "type": rule.trigger_type,
+                    "entity": rule.trigger_entity,
+                    "property": rule.trigger_property
+                },
+                "is_active": rule.is_active
+            }
+        }
+
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        # Check if it's a parsing error from Lark
+        error_type = type(e).__name__
+        if "Unexpected" in error_type or "Visit" in error_type:
+            raise HTTPException(status_code=400, detail=f"Invalid DSL: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update rule: {str(e)}")
 
 
 @router.delete("/{name}")

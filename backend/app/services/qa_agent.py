@@ -184,11 +184,19 @@ class QAAgent:
                             if r.get("labels")
                             else "Unknown"
                         )
+                        props = r.get("properties", {})
                         graph_nodes.append(
-                            {"id": node_name, "label": node_name, "type": node_type}
+                            {
+                                "id": node_name,
+                                "label": node_name,
+                                "type": node_type,
+                                "properties": props,
+                            }
                         )
                         seen_nodes.add(node_name)
-                        query_results.append(f"- {node_name} (类型: {node_type})")
+                        query_results.append(
+                            f"- {node_name} (类型: {node_type}, 属性: {props})"
+                        )
             except Exception as e:
                 query_results.append(f"查询 {instance_name} 时出错: {str(e)}")
 
@@ -200,15 +208,19 @@ class QAAgent:
                     for r in results:
                         node_name = r.get("name")
                         if node_name and node_name not in seen_nodes:
+                            props = r.get("properties", {})
                             graph_nodes.append(
                                 {
                                     "id": node_name,
                                     "label": node_name,
                                     "type": class_name,
+                                    "properties": props,
                                 }
                             )
                             seen_nodes.add(node_name)
-                            query_results.append(f"- {node_name} (类型: {class_name})")
+                            query_results.append(
+                                f"- {node_name} (类型: {class_name}, 属性: {props})"
+                            )
                 except Exception:
                     pass
 
@@ -224,14 +236,19 @@ class QAAgent:
                             if n.get("labels")
                             else "Unknown"
                         )
+                        neighbor_props = n.get("properties", {})
                         graph_nodes.append(
                             {
                                 "id": neighbor_name,
                                 "label": neighbor_name,
                                 "type": neighbor_type,
+                                "properties": neighbor_props,
                             }
                         )
                         seen_nodes.add(neighbor_name)
+                        query_results.append(
+                            f"- {neighbor_name} (类型: {neighbor_type}, 属性: {neighbor_props})"
+                        )
 
                         for rel in n.get("relationships", []):
                             graph_edges.append(

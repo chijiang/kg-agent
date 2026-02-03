@@ -31,17 +31,13 @@ async def chat_stream(
 ):
     """SSE 流式问答"""
 
-    # 获取用户配置
-    llm_result = await db.execute(
-        select(LLMConfig).where(LLMConfig.user_id == current_user.id)
-    )
+    # 获取全局配置
+    llm_result = await db.execute(select(LLMConfig).limit(1))
     llm_config = llm_result.scalar_one_or_none()
     if not llm_config:
         raise HTTPException(status_code=400, detail="LLM not configured")
 
-    neo4j_result = await db.execute(
-        select(Neo4jConfig).where(Neo4jConfig.user_id == current_user.id)
-    )
+    neo4j_result = await db.execute(select(Neo4jConfig).limit(1))
     neo4j_config = neo4j_result.scalar_one_or_none()
     if not neo4j_config:
         raise HTTPException(status_code=400, detail="Neo4j not configured")

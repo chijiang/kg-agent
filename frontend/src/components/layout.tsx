@@ -19,7 +19,9 @@ export function AppLayout({ children, noPadding = false }: { children: React.Rea
   const navItems = [
     { href: '/dashboard', label: '问答' },
     { href: '/graph/import', label: '导入图谱' },
-    { href: '/graph/visualize', label: '图谱可视化' },
+    { href: '/graph/ontology', label: '本体查看' },
+    { href: '/graph/instances', label: '实例图谱' },
+    { href: '/rules', label: '规则管理' },
     { href: '/config', label: '系统配置' },
   ]
 

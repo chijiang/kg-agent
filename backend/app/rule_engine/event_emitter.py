@@ -51,5 +51,14 @@ class GraphEventEmitter:
         Args:
             event: The UpdateEvent to broadcast to all listeners.
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+        logger.warning(
+            f"EventEmitter.emit() called: {event.entity_type}.{event.property} on {event.entity_id}"
+        )
+        logger.warning(f"EventEmitter has {len(self._listeners)} listeners")
+
         for listener in self._listeners:
+            logger.warning(f"Calling listener: {listener}")
             listener(event)

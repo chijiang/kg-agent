@@ -3,8 +3,15 @@
 from lark import Lark, Transformer, Token
 from pathlib import Path
 from app.rule_engine.models import (
-    ActionDef, RuleDef, Precondition, Parameter, Trigger,
-    TriggerType, ForClause, SetStatement, TriggerStatement
+    ActionDef,
+    RuleDef,
+    Precondition,
+    Parameter,
+    Trigger,
+    TriggerType,
+    ForClause,
+    SetStatement,
+    TriggerStatement,
 )
 from typing import Any, Union
 
@@ -124,7 +131,11 @@ class ASTTransformer(Transformer):
                 effect = item
 
         # If there's no effect, check if the last item could be it
-        if effect is None and len(items) > 1 and not isinstance(items[-1], Precondition):
+        if (
+            effect is None
+            and len(items) > 1
+            and not isinstance(items[-1], Precondition)
+        ):
             effect = items[-1]
 
         entity_type, action_name, parameters = entity_action
@@ -133,7 +144,7 @@ class ASTTransformer(Transformer):
             action_name=action_name,
             parameters=parameters,
             preconditions=preconditions,
-            effect=effect
+            effect=effect,
         )
 
     def entity_action(self, items):
@@ -190,12 +201,7 @@ class ASTTransformer(Transformer):
         trigger = items[trigger_idx]
         body = items[trigger_idx + 1]
 
-        return RuleDef(
-            name=name,
-            priority=priority,
-            trigger=trigger,
-            body=body
-        )
+        return RuleDef(name=name, priority=priority, trigger=trigger, body=body)
 
     def priority(self, items):
         return int(items[0])
@@ -211,9 +217,7 @@ class ASTTransformer(Transformer):
         property = parts[1] if len(parts) > 1 else None
 
         return Trigger(
-            type=TriggerType(trigger_type),
-            entity_type=entity_type,
-            property=property
+            type=TriggerType(trigger_type), entity_type=entity_type, property=property
         )
 
     def trigger_type(self, items):
@@ -239,7 +243,7 @@ class ASTTransformer(Transformer):
             variable=var,
             entity_type=entity_type,
             condition=condition,
-            statements=statements
+            statements=statements,
         )
 
     def binding(self, items):
@@ -269,7 +273,7 @@ class ASTTransformer(Transformer):
             entity_type=entity_type,
             action_name=action_name,
             target=target,
-            params=params
+            params=params,
         )
 
     def path(self, items):
@@ -345,21 +349,40 @@ class ASTTransformer(Transformer):
         """
         if len(items) == 1:
             return items[0]
+
+        # Filter out None values from optional parts
+        # When comp_op is not present, it might appear as None
+        non_none_items = [item for item in items if item is not None]
+
+        if len(non_none_items) == 1:
+            # Only a single term, no comparison operator
+            return non_none_items[0]
+
         if len(items) == 2:
             # Check if this is an IS NULL or IS NOT NULL case
             # items could be: [term, None] for "term IS NULL" -> handled by ternary
             # or it could be the result of a special operator
+            if items[1] is None:
+                return items[0]  # Just a term, no operator
             return items[1]
-        # ternary comparison: term op term
-        # items[0] is left term, items[1] is operator, items[2] is right term
+
+        # Check if we have a valid comparison operator
         op = items[1]
+        if op is None:
+            # No operator, just return the term
+            return items[0]
+
         if op == "IS":
             # IS NULL or IS NOT NULL
             # For "term IS NULL": items = [term, "IS", None, None] or [term, "IS", None]
             # For "term IS NOT NULL": items = [term, "IS", "NOT", None] or [term, "IS", "NOT"]
             # The last item is always None (the NULL token)
-            is_not = (len(items) > 2 and items[2] == "NOT") or (len(items) > 3 and items[2] == "NOT")
+            is_not = (len(items) > 2 and items[2] == "NOT") or (
+                len(items) > 3 and items[2] == "NOT"
+            )
             return ("is_null", items[0], is_not)
+
+        # Binary comparison: term op term
         return ("op", op, items[0], items[2])
 
     def comp_op(self, items):
@@ -367,7 +390,7 @@ class ASTTransformer(Transformer):
         # items[0] is a Token with type like '__ANON_0' or similar
         # We need to extract the string value
         if items:
-            return str(items[0].value) if hasattr(items[0], 'value') else str(items[0])
+            return str(items[0].value) if hasattr(items[0], "value") else str(items[0])
         return None
 
     def term(self, items):
@@ -398,10 +421,7 @@ class RuleParser:
             grammar = f.read()
 
         self.lark = Lark(
-            grammar,
-            parser="lalr",
-            transformer=ASTTransformer(),
-            start="start"
+            grammar, parser="lalr", transformer=ASTTransformer(), start="start"
         )
 
     def parse(self, dsl_text: str) -> list[Union[ActionDef, RuleDef]]:

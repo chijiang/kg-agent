@@ -16,7 +16,9 @@ class GraphTools:
     - Instance: 查询实际数据
     """
 
-    def __init__(self, session: AsyncSession, event_emitter: "GraphEventEmitter | None" = None):
+    def __init__(
+        self, session: AsyncSession, event_emitter: "GraphEventEmitter | None" = None
+    ):
         self.session = session
         self.event_emitter = event_emitter
 
@@ -25,10 +27,7 @@ class GraphTools:
         await self.session.run("MATCH (n) DETACH DELETE n")
 
     async def update_entity(
-        self,
-        entity_type: str,
-        entity_id: str,
-        updates: dict[str, Any]
+        self, entity_type: str, entity_id: str, updates: dict[str, Any]
     ) -> dict[str, Any]:
         """Update an entity and emit events for rule engine.
 
@@ -102,7 +101,14 @@ class GraphTools:
             old_value: The previous value
             new_value: The new value
         """
+        import logging
+
+        logger = logging.getLogger(__name__)
+
         if self.event_emitter is None:
+            logger.warning(
+                f"No event_emitter configured, skipping event for {entity_type}.{property}"
+            )
             return
 
         # Import here to avoid circular dependency
@@ -114,6 +120,9 @@ class GraphTools:
             property=property,
             old_value=old_value,
             new_value=new_value,
+        )
+        logger.warning(
+            f"Emitting UpdateEvent: {entity_type}.{property} on {entity_id} ({old_value} -> {new_value})"
         )
         self.event_emitter.emit(event)
 
@@ -214,12 +223,26 @@ class GraphTools:
             MATCH path = (start){rel_pattern}(neighbor)
             WHERE start.name = $name AND start.__is_instance = true
             RETURN DISTINCT neighbor.name AS name, labels(neighbor) AS labels,
-                   [rel IN relationships(path) | type(rel)] AS relationships
+                   properties(neighbor) AS properties,
+                   [rel IN relationships(path) | {{
+                       type: type(rel),
+                       source: startNode(rel).name,
+                       target: endNode(rel).name
+                   }}] AS relationships
             LIMIT 50
         """
 
         result = await self.session.run(query, name=instance_name)
-        return await result.data()
+        data = await result.data()
+
+        # 清理属性，移除内部字段
+        for item in data:
+            if "properties" in item:
+                props = item["properties"]
+                item["properties"] = {
+                    k: v for k, v in props.items() if not k.startswith("__")
+                }
+        return data
 
     async def find_path_between_instances(
         self,
