@@ -12,6 +12,7 @@ from langchain_openai import ChatOpenAI
 from app.services.agent.state import AgentState, StreamEvent, UserIntent
 from app.services.agent.graph import create_agent_graph
 from app.services.agent_tools.query_tools import QueryToolRegistry
+from app.services.agent_tools.action_tools import ActionToolRegistry
 from app.core.neo4j_pool import get_neo4j_driver
 
 logger = logging.getLogger(__name__)
@@ -22,9 +23,9 @@ class EnhancedAgentService:
 
     This agent uses LangGraph for orchestration and supports:
     - Query tools for information retrieval
-    - Action tools for executing operations (Phase 2)
-    - Batch concurrent execution (Phase 2)
-    - Streaming responses with progress updates
+    - Action tools for executing operations
+    - Batch concurrent execution with progress tracking
+    - Streaming responses with real-time updates
     """
 
     def __init__(
@@ -39,8 +40,8 @@ class EnhancedAgentService:
         Args:
             llm_config: LLM configuration dict with api_key, base_url, model
             neo4j_config: Neo4j configuration dict
-            action_executor: Optional ActionExecutor instance (Phase 2)
-            action_registry: Optional ActionRegistry instance (Phase 2)
+            action_executor: Optional ActionExecutor instance for action execution
+            action_registry: Optional ActionRegistry instance for looking up actions
         """
         self.llm_config = llm_config
         self.neo4j_config = neo4j_config
@@ -80,8 +81,15 @@ class EnhancedAgentService:
             query_registry = QueryToolRegistry(self._get_session)
             query_tools = query_registry.tools
 
-            # Action tools will be added in Phase 2
+            # Create action tools if action_executor and action_registry are available
             action_tools = []
+            if self.action_executor and self.action_registry:
+                action_registry = ActionToolRegistry(
+                    self._get_session,
+                    self.action_executor,
+                    self.action_registry
+                )
+                action_tools = action_registry.tools
 
             # Create the graph
             self._graph = create_agent_graph(
@@ -275,8 +283,6 @@ class EnhancedAgentService:
     async def get_available_actions(self, entity_type: str) -> list[dict]:
         """Get available actions for an entity type.
 
-        This method will be fully implemented in Phase 2.
-
         Args:
             entity_type: The entity type to query
 
@@ -310,8 +316,6 @@ class EnhancedAgentService:
     ) -> dict[str, Any]:
         """Validate if an action can be executed.
 
-        This method will be fully implemented in Phase 2.
-
         Args:
             entity_type: The entity type
             action_name: The action name
@@ -320,8 +324,42 @@ class EnhancedAgentService:
         Returns:
             Validation result with can_execute and reasons
         """
-        # Phase 1: Return placeholder
+        if not self.action_registry:
+            return {
+                "can_execute": False,
+                "reason": "Action registry not configured",
+            }
+
+        action = self.action_registry.lookup(entity_type, action_name)
+        if not action:
+            return {
+                "can_execute": False,
+                "reason": f"Action {entity_type}.{action_name} not found",
+            }
+
+        # Check if entity exists
+        from app.services.graph_tools import GraphTools
+        from app.core.neo4j_pool import get_neo4j_driver
+
+        driver = await get_neo4j_driver(**self.neo4j_config)
+        async with driver.session(database=self.neo4j_config["database"]) as session:
+            tools = GraphTools(session)
+            instances = await tools.search_instances(entity_id, entity_type, limit=1)
+
+            if not instances:
+                return {
+                    "can_execute": False,
+                    "reason": f"Entity {entity_id} not found",
+                }
+
+        # For now, return basic validation
+        # Full precondition checking would require evaluating the AST
         return {
-            "can_execute": False,
-            "reason": "Action validation will be implemented in Phase 2",
+            "can_execute": True,
+            "reason": "Action exists and entity found",
+            "action": {
+                "entity_type": action.entity_type,
+                "action_name": action.action_name,
+                "precondition_count": len(action.preconditions or []),
+            },
         }

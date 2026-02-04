@@ -179,27 +179,32 @@ class AgentNodes:
         return state
 
     async def action_tools_node(self, state: AgentState) -> AgentState:
-        """Plan and prepare action execution.
+        """Plan and execute action operations.
 
-        This node identifies targets and plans action execution.
-        Actual execution happens in batch_executor_node (Phase 2).
+        This node uses both query and action tools to:
+        1. Identify target entities using query tools
+        2. Execute actions using action tools
+        3. Return results with success/failure breakdown
 
         Args:
             state: Current agent state
 
         Returns:
-            Updated state with action plan
+            Updated state with action results
         """
         logger.info("Executing action tools node")
 
-        # For now, use query tools to identify targets
-        # Full action execution will be implemented in Phase 2
+        # Combine query and action tools for full capability
+        all_tools = self.query_tools + self.action_tools
+
+        # Bind all tools to LLM
+        llm_with_all_tools = self.llm.bind_tools(all_tools)
 
         # Prepare messages with system prompt
         messages_with_prompt = await self.action_prompt.ainvoke({"messages": state["messages"]})
 
-        # Get response
-        response = await self.query_llm_with_tools.ainvoke(messages_with_prompt)
+        # Get response with tool calls
+        response = await llm_with_all_tools.ainvoke(messages_with_prompt)
         state["messages"].append(response)
 
         # If there are tool calls, execute them
@@ -211,7 +216,8 @@ class AgentNodes:
                 tool_args = tool_call.get("args", {})
                 tool_id = tool_call.get("id", "")
 
-                tool = next((t for t in self.query_tools if t.name == tool_name), None)
+                # Find tool in either query or action tools
+                tool = next((t for t in all_tools if t.name == tool_name), None)
                 if tool:
                     try:
                         result = await tool.ainvoke(tool_args)
@@ -230,11 +236,11 @@ class AgentNodes:
 
             state["messages"].extend(tool_messages)
 
-            # Get final response
+            # Get final response from LLM
             final_response = await self.llm.ainvoke(state["messages"] + tool_messages)
             state["messages"].append(final_response)
 
-        state["current_step"] = "action_planned"
+        state["current_step"] = "action_executed"
 
         return state
 
@@ -282,6 +288,8 @@ class AgentNodes:
         """Summarize action execution results.
 
         This node creates a summary of batch action execution.
+        The actual action execution happens in action_tools_node,
+        this node just ensures we have a final message.
 
         Args:
             state: Current agent state
@@ -291,10 +299,19 @@ class AgentNodes:
         """
         logger.info("Executing summary node")
 
-        # Will be fully implemented in Phase 2 when action execution is ready
-        summary = "Action 执行汇总功能将在 Phase 2 中实现。"
-        ai_message = AIMessage(content=summary)
+        # Check if we have action results in messages
+        # If not, add a completion message
+        last_message = state["messages"][-1]
+
+        # If the last message is already an AI response, we're done
+        if isinstance(last_message, AIMessage):
+            state["current_step"] = "completed"
+            return state
+
+        # Add a completion message
+        ai_message = AIMessage(content="操作执行完成。")
         state["messages"].append(ai_message)
+        state["current_step"] = "completed"
 
         return state
 
