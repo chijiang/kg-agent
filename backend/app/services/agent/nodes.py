@@ -203,7 +203,9 @@ class AgentNodes:
         Returns:
             Updated state with action results
         """
-        logger.info("Executing action tools node")
+        logger.info("=== action_tools_node started ===")
+        logger.info(f"Available query tools: {[t.name for t in self.query_tools]}")
+        logger.info(f"Available action tools: {[t.name for t in self.action_tools]}")
 
         # Combine query and action tools for full capability
         all_tools = self.query_tools + self.action_tools
@@ -221,14 +223,24 @@ class AgentNodes:
         # Multi-turn tool execution loop
         max_iterations = 10  # Prevent infinite loops
         for iteration in range(max_iterations):
+            logger.info(f"--- Action iteration {iteration + 1}/{max_iterations} ---")
+
             # Get response from LLM
             response = await llm_with_all_tools.ainvoke(current_messages)
             current_messages.append(response)
 
+            logger.info(f"LLM response type: {type(response).__name__}")
+            logger.info(f"LLM response content: {str(response.content)[:200] if hasattr(response, 'content') and response.content else 'No content'}...")
+
             # Check if there are tool calls
             if not (hasattr(response, "tool_calls") and response.tool_calls):
+                logger.info("No tool calls in response, ending iteration")
                 # No more tool calls, exit loop
                 break
+
+            logger.info(f"Tool calls in response: {len(response.tool_calls)}")
+            for i, tc in enumerate(response.tool_calls):
+                logger.info(f"  Tool call {i+1}: {tc.get('name')} with args {tc.get('args')}")
 
             # Execute all tool calls in this round
             tool_messages = []
@@ -243,6 +255,8 @@ class AgentNodes:
                     try:
                         logger.info(f"Executing tool: {tool_name} with args: {tool_args}")
                         result = await tool.ainvoke(tool_args)
+                        result_preview = str(result)[:200]
+                        logger.info(f"Tool result: {result_preview}...")
                         tool_messages.append(ToolMessage(
                             content=str(result),
                             tool_call_id=tool_id,

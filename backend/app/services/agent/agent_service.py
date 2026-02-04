@@ -122,6 +122,9 @@ class EnhancedAgentService:
         """
         from langchain_core.messages import HumanMessage
 
+        logger.info(f"=== Agent astream_chat started ===")
+        logger.info(f"User query: {query}")
+
         # Initial thinking event
         yield {
             "type": "thinking",
@@ -130,6 +133,8 @@ class EnhancedAgentService:
 
         # Get the graph
         graph = self._get_graph()
+        action_count = len(self.action_registry._actions) if self.action_registry else 0
+        logger.info(f"Graph created, actions in registry: {action_count}")
 
         # Create initial state
         initial_state: AgentState = {
@@ -139,6 +144,7 @@ class EnhancedAgentService:
         # Track intent and step
         current_intent = None
         content_parts = []
+        processed_messages = set()  # Track already processed messages
 
         try:
             # Stream the graph execution
@@ -148,9 +154,16 @@ class EnhancedAgentService:
                     if node_state is None:
                         continue
 
+                    logger.info(f"=== Node: {node_name} ===")
+
                     # Extract step information
                     step = node_state.get("current_step", "")
                     intent = node_state.get("user_intent", "")
+
+                    if intent:
+                        logger.info(f"Intent: {intent}")
+                    if step:
+                        logger.info(f"Step: {step}")
 
                     # Emit intent change
                     if intent and intent != current_intent:
@@ -161,6 +174,7 @@ class EnhancedAgentService:
                             UserIntent.DIRECT_ANSWER: "回答问题",
                         }.get(intent, intent)
 
+                        logger.info(f"Intent changed to: {intent_text}")
                         yield {
                             "type": "thinking",
                             "content": f"识别意图: {intent_text}",
@@ -168,24 +182,44 @@ class EnhancedAgentService:
 
                     # Process messages from the node
                     messages = node_state.get("messages", [])
+                    logger.info(f"Messages in node: {len(messages)}")
+
                     for msg in messages:
+                        msg_id = id(msg)
+
+                        # Check for tool calls
+                        if hasattr(msg, "tool_calls") and msg.tool_calls:
+                            logger.info(f"Tool calls detected: {len(msg.tool_calls)}")
+                            for tc in msg.tool_calls:
+                                logger.info(f"  - Tool: {tc.get('name')}, Args: {tc.get('args')}")
+
                         # Only process new AI messages
                         if hasattr(msg, "type") and msg.type == "ai":
                             content = msg.content or ""
 
-                            # Skip if it's just our placeholder
-                            if "[注意：Action 执行功能将在 Phase 2 中实现]" in content:
-                                content = content.replace(
-                                    "\n\n[注意：Action 执行功能将在 Phase 2 中实现]", ""
-                                )
+                            if content and msg_id not in processed_messages:
+                                processed_messages.add(msg_id)
+                                logger.info(f"AI Message (length: {len(content)}): {content[:200]}...")
 
-                            if content:
-                                # For query results, stream the content
-                                yield {
-                                    "type": "content",
-                                    "content": content,
-                                }
-                                content_parts.append(content)
+                                # Skip if it's just our placeholder
+                                if "[注意：Action 执行功能将在 Phase 2 中实现]" in content:
+                                    content = content.replace(
+                                        "\n\n[注意：Action 执行功能将在 Phase 2 中实现]", ""
+                                    )
+
+                                if content:
+                                    # For query results, stream the content
+                                    yield {
+                                        "type": "content",
+                                        "content": content,
+                                    }
+                                    content_parts.append(content)
+
+                        # Check for tool messages
+                        if hasattr(msg, "type") and msg.type == "tool":
+                            logger.info(f"Tool result: {msg.name[:50] if hasattr(msg, 'name') else 'unknown'}")
+                            if msg.content:
+                                logger.info(f"  Result: {str(msg.content)[:200]}...")
 
                     # Check for query results that might have graph data
                     query_results = node_state.get("query_results", [])
