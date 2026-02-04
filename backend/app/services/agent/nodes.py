@@ -134,10 +134,11 @@ class AgentNodes:
         logger.info("Executing query tools node")
 
         # Prepare messages with system prompt
-        messages_with_prompt = await self.query_prompt.ainvoke({"messages": state["messages"]})
+        prompt_result = await self.query_prompt.ainvoke({"messages": state["messages"]})
 
         # Track current messages for multi-turn conversation
-        current_messages = list(messages_with_prompt)
+        # prompt_result is a ChatPromptValue with a messages attribute
+        current_messages = list(prompt_result.messages if hasattr(prompt_result, 'messages') else prompt_result)
 
         # Multi-turn tool execution loop
         max_iterations = 10  # Prevent infinite loops
@@ -181,8 +182,8 @@ class AgentNodes:
             current_messages.extend(tool_messages)
             logger.info(f"Query iteration {iteration + 1}, executed {len(tool_messages)} tools")
 
-        # Update state with all messages (except the system prompt)
-        state["messages"].extend(current_messages[1:])
+        # Update state with all messages
+        state["messages"].extend(current_messages[1:])  # Skip the duplicate system prompt
 
         state["current_step"] = "queried"
 
@@ -211,10 +212,11 @@ class AgentNodes:
         llm_with_all_tools = self.llm.bind_tools(all_tools)
 
         # Prepare messages with system prompt
-        messages_with_prompt = await self.action_prompt.ainvoke({"messages": state["messages"]})
+        prompt_result = await self.action_prompt.ainvoke({"messages": state["messages"]})
 
         # Track current messages for multi-turn conversation
-        current_messages = list(messages_with_prompt)
+        # prompt_result is a ChatPromptValue with a messages attribute
+        current_messages = list(prompt_result.messages if hasattr(prompt_result, 'messages') else prompt_result)
 
         # Multi-turn tool execution loop
         max_iterations = 10  # Prevent infinite loops
@@ -266,7 +268,7 @@ class AgentNodes:
             logger.info(f"Completed iteration {iteration + 1}, executed {len(tool_messages)} tools")
 
         # Update state with all messages
-        state["messages"].extend(current_messages[1:])  # Skip the system prompt message
+        state["messages"].extend(current_messages[1:])  # Skip the duplicate system prompt
 
         state["current_step"] = "action_executed"
 
