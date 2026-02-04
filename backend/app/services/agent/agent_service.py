@@ -68,11 +68,18 @@ class EnhancedAgentService:
             self._neo4j_driver = await get_neo4j_driver(**self.neo4j_config)
         return self._neo4j_driver
 
-    async def _get_session(self):
-        """Get a Neo4j session."""
-        driver = await self._get_driver()
-        async with driver.session(database=self.neo4j_config["database"]) as session:
-            yield session
+    def _get_session(self):
+        """Get a Neo4j session generator.
+
+        Each call creates a new session to avoid concurrency issues.
+        """
+        async def _session_generator():
+            driver = self._neo4j_driver
+            if driver is None:
+                driver = await self._get_driver()
+            async with driver.session(database=self.neo4j_config["database"]) as session:
+                yield session
+        return _session_generator()
 
     def _get_graph(self):
         """Get or create the LangGraph."""

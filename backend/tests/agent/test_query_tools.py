@@ -90,16 +90,16 @@ class TestCreateQueryTools:
             mock_graph_tools.get_instances_by_class.assert_called_once_with("PurchaseOrder", None, 20)
 
     @pytest.mark.asyncio
-    async def test_get_instances_by_class_with_filters(self, mock_get_session_func, mock_graph_tools):
-        """Test get_instances_by_class with filters."""
+    async def test_get_instances_by_class_without_filters(self, mock_get_session_func, mock_graph_tools):
+        """Test get_instances_by_class without filters parameter."""
         with patch('app.services.agent_tools.query_tools.GraphTools', return_value=mock_graph_tools):
             tools = create_query_tools(mock_get_session_func)
             tool = next(t for t in tools if t.name == "get_instances_by_class")
 
-            filters = {"status": "pending"}
-            result = await tool.coroutine(class_name="PurchaseOrder", filters=filters)
+            result = await tool.coroutine(class_name="PurchaseOrder")
 
-            mock_graph_tools.get_instances_by_class.assert_called_once_with("PurchaseOrder", filters, 20)
+            # Should be called with None for filters (the parameter was removed)
+            mock_graph_tools.get_instances_by_class.assert_called_once_with("PurchaseOrder", None, 20)
 
     @pytest.mark.asyncio
     async def test_get_instance_neighbors(self, mock_get_session_func, mock_graph_tools):
