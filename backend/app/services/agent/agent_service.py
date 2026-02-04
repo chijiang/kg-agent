@@ -1,0 +1,327 @@
+"""Enhanced Agent Service using LangGraph.
+
+This is the main entry point for the enhanced agent functionality.
+It combines LangGraph orchestration with query and action tools.
+"""
+
+import logging
+import asyncio
+from typing import Any, AsyncIterator
+from langchain_openai import ChatOpenAI
+
+from app.services.agent.state import AgentState, StreamEvent, UserIntent
+from app.services.agent.graph import create_agent_graph
+from app.services.agent_tools.query_tools import QueryToolRegistry
+from app.core.neo4j_pool import get_neo4j_driver
+
+logger = logging.getLogger(__name__)
+
+
+class EnhancedAgentService:
+    """Enhanced QA Agent with query and action capabilities.
+
+    This agent uses LangGraph for orchestration and supports:
+    - Query tools for information retrieval
+    - Action tools for executing operations (Phase 2)
+    - Batch concurrent execution (Phase 2)
+    - Streaming responses with progress updates
+    """
+
+    def __init__(
+        self,
+        llm_config: dict[str, Any],
+        neo4j_config: dict[str, Any],
+        action_executor: Any = None,
+        action_registry: Any = None,
+    ):
+        """Initialize the enhanced agent service.
+
+        Args:
+            llm_config: LLM configuration dict with api_key, base_url, model
+            neo4j_config: Neo4j configuration dict
+            action_executor: Optional ActionExecutor instance (Phase 2)
+            action_registry: Optional ActionRegistry instance (Phase 2)
+        """
+        self.llm_config = llm_config
+        self.neo4j_config = neo4j_config
+        self.action_executor = action_executor
+        self.action_registry = action_registry
+
+        # Initialize LLM
+        self.llm = ChatOpenAI(
+            api_key=llm_config["api_key"],
+            base_url=llm_config["base_url"],
+            model=llm_config["model"],
+            temperature=0,
+        )
+
+        # Create Neo4j session provider
+        self._neo4j_driver = None
+
+        # Initialize graph (lazy loading)
+        self._graph = None
+
+    async def _get_driver(self):
+        """Get or create Neo4j driver."""
+        if self._neo4j_driver is None:
+            self._neo4j_driver = await get_neo4j_driver(**self.neo4j_config)
+        return self._neo4j_driver
+
+    async def _get_session(self):
+        """Get a Neo4j session."""
+        driver = await self._get_driver()
+        async with driver.session(database=self.neo4j_config["database"]) as session:
+            yield session
+
+    def _get_graph(self):
+        """Get or create the LangGraph."""
+        if self._graph is None:
+            # Create query tools registry
+            query_registry = QueryToolRegistry(self._get_session)
+            query_tools = query_registry.tools
+
+            # Action tools will be added in Phase 2
+            action_tools = []
+
+            # Create the graph
+            self._graph = create_agent_graph(
+                llm=self.llm,
+                query_tools=query_tools,
+                action_tools=action_tools,
+            )
+
+        return self._graph
+
+    async def astream_chat(self, query: str) -> AsyncIterator[StreamEvent]:
+        """Stream chat responses with real-time updates.
+
+        This method yields events as the agent processes the request,
+        including thinking, tool calls, and final results.
+
+        Args:
+            query: User's query or request
+
+        Yields:
+            StreamEvent objects with type and content
+        """
+        from langchain_core.messages import HumanMessage
+
+        # Initial thinking event
+        yield {
+            "type": "thinking",
+            "content": "正在分析您的请求...",
+        }
+
+        # Get the graph
+        graph = self._get_graph()
+
+        # Create initial state
+        initial_state: AgentState = {
+            "messages": [HumanMessage(content=query)],
+        }
+
+        # Track intent and step
+        current_intent = None
+        content_parts = []
+
+        try:
+            # Stream the graph execution
+            async for event in graph.astream(initial_state):
+                # event format: {"node_name": {state_dict}}
+                for node_name, node_state in event.items():
+                    if node_state is None:
+                        continue
+
+                    # Extract step information
+                    step = node_state.get("current_step", "")
+                    intent = node_state.get("user_intent", "")
+
+                    # Emit intent change
+                    if intent and intent != current_intent:
+                        current_intent = intent
+                        intent_text = {
+                            UserIntent.QUERY: "查询信息",
+                            UserIntent.ACTION: "执行操作",
+                            UserIntent.DIRECT_ANSWER: "回答问题",
+                        }.get(intent, intent)
+
+                        yield {
+                            "type": "thinking",
+                            "content": f"识别意图: {intent_text}",
+                        }
+
+                    # Process messages from the node
+                    messages = node_state.get("messages", [])
+                    for msg in messages:
+                        # Only process new AI messages
+                        if hasattr(msg, "type") and msg.type == "ai":
+                            content = msg.content or ""
+
+                            # Skip if it's just our placeholder
+                            if "[注意：Action 执行功能将在 Phase 2 中实现]" in content:
+                                content = content.replace(
+                                    "\n\n[注意：Action 执行功能将在 Phase 2 中实现]", ""
+                                )
+
+                            if content:
+                                # For query results, stream the content
+                                yield {
+                                    "type": "content",
+                                    "content": content,
+                                }
+                                content_parts.append(content)
+
+                    # Check for query results that might have graph data
+                    query_results = node_state.get("query_results", [])
+                    if query_results and current_intent == UserIntent.QUERY:
+                        # Try to extract graph data from query results
+                        graph_data = self._extract_graph_data(query_results)
+                        if graph_data and (graph_data.get("nodes") or graph_data.get("edges")):
+                            yield {
+                                "type": "graph_data",
+                                "nodes": graph_data.get("nodes", [])[:20],
+                                "edges": graph_data.get("edges", [])[:30],
+                            }
+
+        except Exception as e:
+            logger.error(f"Error in astream_chat: {e}", exc_info=True)
+            yield {
+                "type": "content",
+                "content": f"\n\n抱歉，处理请求时发生错误: {str(e)}",
+            }
+
+        # Final done event
+        yield {"type": "done"}
+
+    def _extract_graph_data(self, query_results: list) -> dict | None:
+        """Extract graph visualization data from query results.
+
+        Args:
+            query_results: List of query execution results
+
+        Returns:
+            Dict with nodes and edges for visualization
+        """
+        nodes = []
+        edges = []
+        seen_nodes = set()
+
+        for step in query_results:
+            if len(step) >= 2:
+                tool_call, tool_result = step[0], step[1]
+
+                # Parse tool result to extract entities
+                result_str = str(tool_result)
+
+                # Try to extract instances from the result
+                # This is a simple heuristic - in production, you'd parse more carefully
+                import re
+
+                # Look for patterns like "PO_2024_001" or "Supplier_001"
+                entity_pattern = r'\b[A-Z][a-zA-Z_]*[_-]\d+[_-]?\d*\b'
+                entities = re.findall(entity_pattern, result_str)
+
+                for entity in entities:
+                    if entity not in seen_nodes:
+                        seen_nodes.add(entity)
+                        # Try to infer type from the entity name
+                        entity_type = "Unknown"
+                        for prefix in ["PO", "Invoice", "Supplier", "Customer"]:
+                            if entity.startswith(prefix):
+                                entity_type = prefix
+                                break
+
+                        nodes.append({
+                            "id": entity,
+                            "label": entity,
+                            "type": entity_type,
+                        })
+
+                # Look for relationship patterns
+                rel_pattern = r'(\w+)\s*--\[(\w+)\]\s*-->\s*(\w+)'
+                relationships = re.findall(rel_pattern, result_str)
+
+                for rel in relationships:
+                    source, rel_type, target = rel
+                    edges.append({
+                        "source": source,
+                        "target": target,
+                        "label": rel_type,
+                    })
+
+        return {"nodes": nodes, "edges": edges} if nodes or edges else None
+
+    async def ainvoke(self, query: str) -> AgentState:
+        """Invoke the agent and return the final state.
+
+        This is a non-streaming version of astream_chat.
+
+        Args:
+            query: User's query or request
+
+        Returns:
+            Final AgentState after execution
+        """
+        from langchain_core.messages import HumanMessage
+
+        graph = self._get_graph()
+        initial_state: AgentState = {
+            "messages": [HumanMessage(content=query)],
+        }
+
+        result = await graph.ainvoke(initial_state)
+        return result
+
+    async def get_available_actions(self, entity_type: str) -> list[dict]:
+        """Get available actions for an entity type.
+
+        This method will be fully implemented in Phase 2.
+
+        Args:
+            entity_type: The entity type to query
+
+        Returns:
+            List of available action definitions
+        """
+        if self.action_registry is None:
+            return []
+
+        actions = self.action_registry.list_by_entity(entity_type)
+
+        return [
+            {
+                "entity_type": action.entity_type,
+                "action_name": action.action_name,
+                "parameters": [
+                    {"name": p.name, "type": p.param_type, "optional": p.optional}
+                    for p in (action.parameters or [])
+                ],
+                "precondition_count": len(action.preconditions or []),
+                "has_effect": action.effect is not None,
+            }
+            for action in actions
+        ]
+
+    async def validate_action(
+        self,
+        entity_type: str,
+        action_name: str,
+        entity_id: str,
+    ) -> dict[str, Any]:
+        """Validate if an action can be executed.
+
+        This method will be fully implemented in Phase 2.
+
+        Args:
+            entity_type: The entity type
+            action_name: The action name
+            entity_id: The entity ID
+
+        Returns:
+            Validation result with can_execute and reasons
+        """
+        # Phase 1: Return placeholder
+        return {
+            "can_execute": False,
+            "reason": "Action validation will be implemented in Phase 2",
+        }
