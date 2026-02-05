@@ -9,7 +9,6 @@ from langchain_core.tools import StructuredTool
 from pydantic import BaseModel, Field
 
 from app.services.pg_graph_storage import PGGraphStorage
-from sqlalchemy.ext.asyncio import AsyncSession
 
 
 class SearchInstancesInput(BaseModel):
@@ -60,29 +59,26 @@ class EmptyInput(BaseModel):
     pass
 
 
-async def _get_session(get_session_func: Callable) -> AsyncSession:
-    """Get the database session from the session function."""
-    return await get_session_func()
-
-
 async def _execute_with_session(
     get_session_func: Callable,
-    func: Callable[[GraphTools], Any],
+    func: Callable[[PGGraphStorage], Any],
     event_emitter: Any = None
 ) -> Any:
     """Execute a function with a PostgreSQL graph storage instance.
 
     Args:
         get_session_func: Function that returns a session context manager
-        func: Function to execute with GraphTools instance
+        func: Function to execute with PGGraphStorage instance
         event_emitter: Optional event emitter for graph updates
 
     Returns:
         Result of the function
     """
-    async with await _get_session(get_session_func) as session:
-        tools = GraphTools(session, event_emitter)
-        return await func(tools)
+    # get_session_func returns a context manager
+    session_cm = get_session_func()
+    async with session_cm as session:
+        storage = PGGraphStorage(session, event_emitter)
+        return await func(storage)
 
 
 def create_query_tools(get_session_func: Callable[[], Any], event_emitter: Any = None) -> list[StructuredTool]:

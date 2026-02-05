@@ -63,12 +63,25 @@ class EnhancedAgentService:
         self._graph = None
 
     def _get_session(self):
-        """Get a database session context manager.
+        """Get a database session context manager for query tools.
 
-        Returns None since Neo4j has been removed.
-        Query tools now use PostgreSQL directly.
+        Returns an async context manager that yields a database session.
         """
-        return None
+        from app.core.database import async_session
+
+        class SessionContextManager:
+            def __init__(self):
+                self._session = None
+
+            async def __aenter__(self):
+                self._session = async_session()
+                return await self._session.__aenter__()
+
+            async def __aexit__(self, *args):
+                if self._session:
+                    await self._session.__aexit__(*args)
+
+        return SessionContextManager()
 
     def _get_graph(self):
         """Get or create the LangGraph."""

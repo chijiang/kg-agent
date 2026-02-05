@@ -65,6 +65,16 @@ class PGGraphStorage:
         )
         self.event_emitter.emit(event)
 
+    async def _emit_graph_view_event(self, nodes: List[Dict], edges: List[Dict]) -> None:
+        """触发图谱预览事件"""
+        if self.event_emitter is None:
+            return
+
+        from app.rule_engine.models import GraphViewEvent
+
+        event = GraphViewEvent(nodes=nodes, edges=edges)
+        self.event_emitter.emit(event)
+
     # ==================== 基础操作 ====================
 
     async def clear_graph(self):
@@ -216,7 +226,7 @@ class PGGraphStorage:
         result = await self.db.execute(query)
         entities = result.scalars().all()
 
-        return [
+        results = [
             {
                 "name": e.name,
                 "labels": [e.entity_type],
@@ -227,6 +237,21 @@ class PGGraphStorage:
             }
             for e in entities
         ]
+
+        # 触发可视化事件
+        nodes = []
+        for r in results:
+            nodes.append({
+                "id": r["name"],
+                "label": r["name"],
+                "type": r["labels"][0] if r["labels"] else "Entity",
+                "properties": r["properties"]
+            })
+        
+        if nodes:
+            await self._emit_graph_view_event(nodes=nodes, edges=[])
+
+        return results
 
     async def get_instance_neighbors(
         self,
@@ -414,6 +439,36 @@ class PGGraphStorage:
                             "target": entity.name if rel.source_id == start_node else instance_name
                         }]
                     })
+            
+            # 触发可视化事件
+            viz_nodes = []
+            viz_edges = []
+            
+            # 起始节点
+            viz_nodes.append({
+                "id": instance_name,
+                "label": instance_name,
+                "type": "Entity",
+                "properties": {}
+            })
+            
+            for n in neighbors:
+                viz_nodes.append({
+                    "id": n["name"],
+                    "label": n["name"],
+                    "type": n["labels"][0] if n["labels"] else "Entity",
+                    "properties": n["properties"]
+                })
+                for r in n["relationships"]:
+                    viz_edges.append({
+                        "source": r["source"],
+                        "target": r["target"],
+                        "label": r["type"]
+                    })
+            
+            if viz_nodes:
+                await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
+
             return neighbors
 
     async def _get_multi_hop_neighbors(
@@ -484,7 +539,7 @@ class PGGraphStorage:
         result = await self.db.execute(sql_query, {"start_id": start_id, "hops": hops})
         rows = result.fetchall()
 
-        return [
+        results = [
             {
                 "name": row[1],
                 "labels": [row[2]],
@@ -493,6 +548,37 @@ class PGGraphStorage:
             }
             for row in rows
         ]
+
+        # 触发可视化事件
+        viz_nodes = []
+        viz_edges = []
+        
+        # 起始节点
+        viz_nodes.append({
+            "id": instance_name,
+            "label": instance_name,
+            "type": "Entity",
+            "properties": {}
+        })
+        
+        for n in results:
+            viz_nodes.append({
+                "id": n["name"],
+                "label": n["name"],
+                "type": n["labels"][0] if n["labels"] else "Entity",
+                "properties": n["properties"]
+            })
+            for r in n["relationships"]:
+                viz_edges.append({
+                    "source": r["source"],
+                    "target": r["target"],
+                    "label": r["type"]
+                })
+        
+        if viz_nodes:
+            await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
+
+        return results
 
     async def find_path_between_instances(
         self,
@@ -610,6 +696,19 @@ class PGGraphStorage:
                 "source": path_names[i],
                 "target": path_names[i + 1]
             })
+        
+        # 触发可视化事件
+        viz_nodes = []
+        for n in nodes:
+            viz_nodes.append({
+                "id": n["name"],
+                "label": n["name"],
+                "type": n["labels"][0] if n["labels"] else "Entity",
+                "properties": {} # 路径查询结果中没有属性，这里简化
+            })
+            
+        if viz_nodes:
+            await self._emit_graph_view_event(nodes=viz_nodes, edges=relationships)
 
         return {"nodes": nodes, "relationships": relationships}
 
@@ -632,7 +731,7 @@ class PGGraphStorage:
         result = await self.db.execute(query)
         entities = result.scalars().all()
 
-        return [
+        results = [
             {
                 "name": e.name,
                 "properties": {
@@ -642,6 +741,21 @@ class PGGraphStorage:
             }
             for e in entities
         ]
+        
+        # 触发可视化事件
+        nodes = []
+        for r in results:
+            nodes.append({
+                "id": r["name"],
+                "label": r["name"],
+                "type": class_name,
+                "properties": r["properties"]
+            })
+        
+        if nodes:
+            await self._emit_graph_view_event(nodes=nodes, edges=[])
+
+        return results
 
     async def get_entity_by_name(self, name: str, entity_type: Optional[str] = None) -> Optional[Dict]:
         """根据名称获取实体详情"""
