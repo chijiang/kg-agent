@@ -3,6 +3,7 @@
 import asyncio
 import logging
 from typing import Any, TYPE_CHECKING
+from contextlib import asynccontextmanager
 from app.rule_engine.rule_registry import RuleRegistry
 from app.rule_engine.models import (
     RuleDef,
@@ -49,12 +50,26 @@ class RuleEngine:
         self.session_provider = session_provider
         self.translator = PGQTranslator()
 
-    async def _get_session(self):
-        """Get a database session, refreshing if necessary."""
-        if not self.db_session and self.session_provider:
-            self.db_session = await self.session_provider()
+    @asynccontextmanager
+    async def _session_scope(self):
+        """Provide a session scope for event handling."""
+        if self.db_session:
+            yield self.db_session
+            return
 
-        return self.db_session
+        if self.session_provider:
+            # Check if session_provider is an async generator (like from FastAPI)
+            # or a simple factory returning an async context manager
+            import inspect
+            if inspect.isasyncgenfunction(self.session_provider):
+                async for session in self.session_provider():
+                    yield session
+            else:
+                # Assume it returns an async context manager (e.g., async_session())
+                async with self.session_provider() as session:
+                    yield session
+        else:
+            yield None
 
     def on_event(self, event: UpdateEvent) -> list[dict[str, Any]]:
         """Handle a graph update event synchronously.
@@ -90,7 +105,7 @@ class RuleEngine:
             f"Rule engine received event: {event.entity_type}.{event.property} on {event.entity_id}"
         )
 
-        # Match rules to the event
+        # Matched rules to the event
         matched_rules = self._match_rules(event)
 
         if not matched_rules:
@@ -103,13 +118,18 @@ class RuleEngine:
             f"Matched {len(matched_rules)} rules: {[r.name for r in matched_rules]}"
         )
 
-        # Execute each matching rule
+        # Execute each matching rule within a session scope
         results = []
-        for rule in matched_rules:
-            result = await self._execute_rule_async(rule, event)
-            if result:
-                results.append(result)
-                logger.info(f"Rule {rule.name} executed: {result}")
+        async with self._session_scope() as session:
+            if session is None:
+                logger.error("No database session available for rule execution")
+                return []
+                
+            for rule in matched_rules:
+                result = await self._execute_rule_async(rule, event, session)
+                if result:
+                    results.append(result)
+                    logger.info(f"Rule {rule.name} executed: {result}")
 
         return results
 
@@ -138,7 +158,7 @@ class RuleEngine:
         return self.registry.get_by_trigger(trigger)
 
     async def _execute_rule_async(
-        self, rule: RuleDef, event: UpdateEvent
+        self, rule: RuleDef, event: UpdateEvent, session: "AsyncSession"
     ) -> dict[str, Any] | None:
         """Execute a rule against an event asynchronously.
 
@@ -149,20 +169,12 @@ class RuleEngine:
         Returns:
             Execution result or None if execution failed
         """
-        if self.db_session is None and self.session_provider is None:
-            logger.error("Database session not available for rule execution")
-            return {
-                "rule": rule.name,
-                "error": "Database session not available",
-                "success": False,
-            }
-
         try:
             # Bind the event entity to the rule's FOR clause variable
             for_clause = rule.body
 
-            # Execute the FOR clause with actual Neo4j queries
-            result = await self._execute_for_clause_async(for_clause, event)
+            # Execute the FOR clause with actual database queries
+            result = await self._execute_for_clause_async(for_clause, event, session)
 
             return {
                 "rule": rule.name,
@@ -176,7 +188,7 @@ class RuleEngine:
             return {"rule": rule.name, "error": str(e), "success": False}
 
     async def _execute_for_clause_async(
-        self, for_clause: ForClause, event: UpdateEvent
+        self, for_clause: ForClause, event: UpdateEvent, session: "AsyncSession"
     ) -> dict[str, Any]:
         """Execute a FOR clause with actual database queries.
 
@@ -195,9 +207,8 @@ class RuleEngine:
         entities_affected = 0
         statements_executed = 0
 
-        session = await self._get_session()
         if not session:
-            logger.error("No database session available for rule execution")
+            logger.error("No database session provided for rule execution")
             return {
                 "entities_affected": 0,
                 "statements_executed": 0,

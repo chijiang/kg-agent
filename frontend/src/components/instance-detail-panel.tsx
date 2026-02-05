@@ -29,6 +29,7 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
     const [editing, setEditing] = useState(false)
     const [editedProperties, setEditedProperties] = useState<Record<string, any>>({})
     const [saving, setSaving] = useState(false)
+    const [metadata, setMetadata] = useState<Record<string, any>>({})
     const [expandedProps, setExpandedProps] = useState<Record<string, any>>({})
     const [actions, setActions] = useState<ActionRuntimeInfo[]>([])
     const [executingAction, setExecutingAction] = useState<string | null>(null)
@@ -48,11 +49,20 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
 
         try {
             const res = await graphApi.getNode(node.id || node.name, token)
-            const props = res.data || {}
-            // 过滤内部属性
+            const data = res.data || {}
+
+            // 提取元数据
+            setMetadata({
+                ID: data.id,
+                NAME: data.name,
+                TYPE: data.entity_type
+            })
+
+            // 提取并过滤业务属性 (PostgreSQL 中 properties 是个字典)
+            const props = data.properties || {}
             const filteredProps: Record<string, any> = {}
             Object.entries(props).forEach(([key, value]) => {
-                if (!key.startsWith('__') && key !== 'uri') {
+                if (!key.startsWith('__')) {
                     filteredProps[key] = value
                 }
             })
@@ -60,7 +70,11 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
             setEditedProperties(filteredProps)
         } catch (err) {
             console.error('Failed to load node details:', err)
-            // 使用已有的属性
+            // 回退逻辑
+            setMetadata({
+                NAME: node.name,
+                TYPE: node.nodeLabel
+            })
             const props = node.properties || {}
             setExpandedProps(props)
             setEditedProperties(props)
@@ -226,14 +240,31 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                 </div>
             </div>
 
+            {/* 元数据 (不可编辑) */}
+            <div className="p-4 border-b bg-gray-50/50">
+                <div className="grid grid-cols-1 gap-2">
+                    {Object.entries(metadata).map(([key, value]) => (
+                        <div key={key} className="flex flex-col gap-0.5">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-tighter">{key}</span>
+                            <span className="text-sm font-medium text-gray-600 truncate">{String(value || '-')}</span>
+                        </div>
+                    ))}
+                </div>
+            </div>
+
             {/* 属性列表 */}
             <div className="flex-1 overflow-y-auto p-4">
-                <h4 className="text-sm font-semibold text-gray-700 mb-3">实体属性</h4>
+                <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-sm font-semibold text-gray-700">业务属性</h4>
+                    {editing && (
+                        <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded">编辑中</span>
+                    )}
+                </div>
 
                 {Object.keys(displayProps).length === 0 ? (
                     <p className="text-sm text-gray-400 italic">暂无属性</p>
                 ) : (
-                    <div className="space-y-3">
+                    <div className="space-y-4">
                         {Object.entries(displayProps).map(([key, value]) => (
                             <div key={key} className="space-y-1">
                                 <label className="text-xs font-medium text-gray-500 uppercase tracking-wide">
@@ -243,10 +274,10 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                                     <Input
                                         value={String(value ?? '')}
                                         onChange={(e) => handlePropertyChange(key, e.target.value)}
-                                        className="w-full text-sm"
+                                        className="w-full h-8 text-sm border-emerald-100 focus-visible:ring-emerald-500"
                                     />
                                 ) : (
-                                    <div className="px-3 py-2 bg-gray-50 rounded-lg text-sm text-gray-700 border border-gray-100">
+                                    <div className="px-3 py-2 bg-white rounded-lg text-sm text-gray-700 border border-gray-100 shadow-sm">
                                         {formatValue(value)}
                                     </div>
                                 )}

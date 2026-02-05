@@ -40,16 +40,11 @@ async def startup():
 
     # Create RuleEngine with database session provider
     # Neo4j has been replaced with PostgreSQL
-    async def get_db_session():
-        """Provide database sessions for rule engine."""
-        async with async_session() as session:
-            yield session
-
     rule_engine = RuleEngine(
         action_registry,
         rule_registry,
         db_session=None,
-        session_provider=get_db_session,
+        session_provider=async_session,
     )
 
     # Connect event emitter to rule engine

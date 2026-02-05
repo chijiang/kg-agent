@@ -252,6 +252,7 @@ class PGQTranslator:
         """翻译属性路径
 
         例如: "po.status" -> "e.properties->>'status'"
+        如果是基础字段: "po.id" -> "e.id"
 
         Args:
             path: 点分隔的属性路径
@@ -263,14 +264,31 @@ class PGQTranslator:
         if not parts:
             return "null"
 
+        # 映射别名。在目前实现中，主要实体通常用 'e'
+        # 在 GRAPH_TABLE 或 JOIN 中可能会有不同别名
+        # 这里简化处理，如果是 this 则映射到 e
         var = parts[0]
-        if len(parts) == 1:
-            return var
+        alias = "e" if var == "this" else var
 
-        # 处理属性访问: properties->>'key'
-        # 假设使用别名 e 表示当前实体
-        prop_path = "->>".join([f"'{p}'" for p in parts[1:]])
-        return f"e.properties->{prop_path}"
+        if len(parts) == 1:
+            return alias
+
+        attr = parts[1]
+        
+        # 基础列名直接访问
+        base_cols = {"id", "name", "entity_type", "is_instance", "uri", "properties"}
+        if attr in base_cols and len(parts) == 2:
+            return f"{alias}.{attr}"
+
+        # 属性访问: properties->'key1'->>'key2'
+        # 对 JSONB，最后一级使用 ->> 获取 text，中间级使用 -> 获取 jsonb
+        if len(parts) == 2:
+            return f"{alias}.properties->>'{attr}'"
+        
+        # 多级嵌套
+        path_segments = "->".join([f"'{p}'" for p in parts[1:-1]])
+        last_segment = f"->>'{parts[-1]}'"
+        return f"{alias}.properties->{path_segments}{last_segment}"
 
     def _translate_exists_pattern(self, pattern: Any) -> str:
         """翻译存在性检查模式

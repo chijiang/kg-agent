@@ -155,9 +155,9 @@ class PGGraphStorage:
         rels = result.scalars().all()
         return [
             {
-                "source_class": r.source_class.name,
-                "relationship": r.relationship_type,
-                "target_class": r.target_class.name
+                "source": r.source_class.name,
+                "type": r.relationship_type,
+                "target": r.target_class.name
             }
             for r in rels
         ]

@@ -325,9 +325,9 @@ def create_query_tools(get_session_func: Callable[[], Any], event_emitter: Any =
 
             output = [f"知识图谱定义了 {len(results)} 种关系:\n"]
             for r in results:
-                source = r.get("source_class", "N/A")
-                rel_type = r.get("relationship", "N/A")
-                target = r.get("target_class", "N/A")
+                source = r.get("source", "N/A")
+                rel_type = r.get("type", "N/A")
+                target = r.get("target", "N/A")
                 output.append(f"  - {source} --[{rel_type}]--> {target}")
 
             return "\n".join(output)

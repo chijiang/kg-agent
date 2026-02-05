@@ -39,7 +39,7 @@ class EvaluationContext:
         """Resolve a property path to a value.
 
         Paths can be:
-        - "this.prop" -> entity["prop"]
+        - "this.prop" -> entity["prop"] or entity["properties"]["prop"]
         - "this.nested.prop" -> entity["nested"]["prop"]
         - "varName.prop" -> variables["varName"]["prop"]
 
@@ -63,9 +63,18 @@ class EvaluationContext:
                 return None
 
         # Navigate through nested properties
-        for part in parts[1:]:
+        for i, part in enumerate(parts[1:]):
             if isinstance(obj, dict):
-                obj = obj.get(part)
+                # Try direct access first
+                val = obj.get(part)
+                
+                # If not found and it's the first level after 'this', check 'properties'
+                if val is None and root_name == "this" and i == 0:
+                    props = obj.get("properties", {})
+                    if isinstance(props, dict):
+                        val = props.get(part)
+                
+                obj = val
             else:
                 return None
             if obj is None:

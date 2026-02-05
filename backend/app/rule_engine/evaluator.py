@@ -200,6 +200,10 @@ class ExpressionEvaluator:
 
     async def _resolve_value(self, path: Any) -> Any:
         """Resolve a value from a property path or return the value directly."""
-        if isinstance(path, str) and path.startswith("this."):
-            return self.ctx.resolve_path(path)
+        if isinstance(path, str):
+            # Try resolving via context (handles 'this.' and variables/parameters)
+            resolved = self.ctx.resolve_path(path)
+            if resolved is not None:
+                return resolved
+        
         return await self.evaluate(path)
