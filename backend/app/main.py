@@ -3,7 +3,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from app.core.config import settings
-from app.api import auth, config, chat, graph, conversations, actions, rules
+from app.api import (
+    auth,
+    config,
+    chat,
+    graph,
+    conversations,
+    actions,
+    rules,
+    data_products,
+    data_mappings,
+)
 from app.core.database import engine, Base, async_session
 import app.models  # Implicitly registers models
 
@@ -139,6 +149,8 @@ app.include_router(graph.router)
 app.include_router(conversations.router)
 app.include_router(actions.router)
 app.include_router(rules.router)
+app.include_router(data_products.router)
+app.include_router(data_mappings.router)
 
 
 @app.get("/health")

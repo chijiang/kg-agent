@@ -239,3 +239,235 @@ export const actionsApi = {
     }),
 }
 
+// ============================================================================
+// Data Product Types
+// ============================================================================
+
+export type ConnectionStatus = 'unknown' | 'connected' | 'disconnected' | 'error'
+export type SyncDirection = 'pull' | 'push' | 'bidirectional'
+
+export interface DataProduct {
+  id: number
+  name: string
+  description: string | null
+  grpc_host: string
+  grpc_port: number
+  service_name: string
+  connection_status: ConnectionStatus
+  last_health_check: string | null
+  last_error: string | null
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface EntityMapping {
+  id: number
+  data_product_id: number
+  ontology_class_name: string
+  grpc_message_type: string
+  list_method: string | null
+  get_method: string | null
+  create_method: string | null
+  update_method: string | null
+  delete_method: string | null
+  sync_enabled: boolean
+  sync_direction: SyncDirection
+  id_field_mapping: string
+  name_field_mapping: string
+  created_at: string
+  updated_at: string
+  property_mapping_count: number
+}
+
+export interface PropertyMapping {
+  id: number
+  entity_mapping_id: number
+  ontology_property: string
+  grpc_field: string
+  transform_expression: string | null
+  inverse_transform: string | null
+  is_required: boolean
+  sync_on_update: boolean
+  created_at: string
+}
+
+export interface RelationshipMapping {
+  id: number
+  source_entity_mapping_id: number
+  target_entity_mapping_id: number
+  ontology_relationship: string
+  source_fk_field: string
+  target_id_field: string
+  sync_enabled: boolean
+  created_at: string
+  source_ontology_class: string | null
+  target_ontology_class: string | null
+}
+
+export interface GrpcMethodInfo {
+  name: string
+  input_type: string
+  output_type: string
+  is_streaming: boolean
+}
+
+export interface GrpcServiceSchema {
+  service_name: string
+  methods: GrpcMethodInfo[]
+  message_types: any[]
+}
+
+export interface ConnectionTestResult {
+  success: boolean
+  message: string
+  latency_ms: number | null
+}
+
+export interface SyncResult {
+  success: boolean
+  records_processed: number
+  records_created: number
+  records_updated: number
+  records_failed: number
+  errors: string[]
+  duration_ms: number
+}
+
+// ============================================================================
+// Data Product API
+// ============================================================================
+
+export const dataProductsApi = {
+  // CRUD
+  list: (activeOnly = false) =>
+    api.get<{ items: DataProduct[]; total: number }>('/data-products', { params: { active_only: activeOnly } }),
+
+  get: (id: number) =>
+    api.get<DataProduct>(`/data-products/${id}`),
+
+  create: (data: {
+    name: string
+    description?: string
+    grpc_host: string
+    grpc_port: number
+    service_name: string
+    proto_content?: string
+    is_active?: boolean
+  }) => api.post<DataProduct>('/data-products', data),
+
+  update: (id: number, data: {
+    name?: string
+    description?: string
+    grpc_host?: string
+    grpc_port?: number
+    service_name?: string
+    proto_content?: string
+    is_active?: boolean
+  }) => api.put<DataProduct>(`/data-products/${id}`, data),
+
+  delete: (id: number) =>
+    api.delete(`/data-products/${id}`),
+
+  // Connection & Schema
+  testConnection: (id: number) =>
+    api.post<ConnectionTestResult>(`/data-products/${id}/test-connection`),
+
+  getSchema: (id: number) =>
+    api.get<GrpcServiceSchema>(`/data-products/${id}/schema`),
+
+  getMethods: (id: number) =>
+    api.get<{ methods: any[] }>(`/data-products/${id}/methods`),
+
+  // Entity mappings for a product
+  getEntityMappings: (id: number) =>
+    api.get<{ items: EntityMapping[]; total: number }>(`/data-products/${id}/entity-mappings`),
+}
+
+// ============================================================================
+// Data Mappings API
+// ============================================================================
+
+export const dataMappingsApi = {
+  // Entity Mappings
+  createEntityMapping: (data: {
+    data_product_id: number
+    ontology_class_name: string
+    grpc_message_type: string
+    list_method?: string
+    get_method?: string
+    create_method?: string
+    update_method?: string
+    delete_method?: string
+    sync_enabled?: boolean
+    sync_direction?: SyncDirection
+    id_field_mapping?: string
+    name_field_mapping?: string
+  }) => api.post<EntityMapping>('/data-mappings/entity-mappings', data),
+
+  listEntityMappings: (dataProductId?: number, ontologyClassName?: string) =>
+    api.get<EntityMapping[]>('/data-mappings/entity-mappings', {
+      params: { data_product_id: dataProductId, ontology_class_name: ontologyClassName }
+    }),
+
+  getEntityMapping: (id: number) =>
+    api.get<EntityMapping>(`/data-mappings/entity-mappings/${id}`),
+
+  updateEntityMapping: (id: number, data: {
+    grpc_message_type?: string
+    list_method?: string
+    get_method?: string
+    create_method?: string
+    update_method?: string
+    delete_method?: string
+    sync_enabled?: boolean
+    sync_direction?: SyncDirection
+    id_field_mapping?: string
+    name_field_mapping?: string
+  }) => api.put<EntityMapping>(`/data-mappings/entity-mappings/${id}`, data),
+
+  deleteEntityMapping: (id: number) =>
+    api.delete(`/data-mappings/entity-mappings/${id}`),
+
+  // Property Mappings
+  createPropertyMapping: (entityMappingId: number, data: {
+    ontology_property: string
+    grpc_field: string
+    transform_expression?: string
+    inverse_transform?: string
+    is_required?: boolean
+    sync_on_update?: boolean
+  }) => api.post<PropertyMapping>(`/data-mappings/entity-mappings/${entityMappingId}/properties`, data),
+
+  listPropertyMappings: (entityMappingId: number) =>
+    api.get<PropertyMapping[]>(`/data-mappings/entity-mappings/${entityMappingId}/properties`),
+
+  updatePropertyMapping: (propId: number, data: {
+    grpc_field?: string
+    transform_expression?: string
+    inverse_transform?: string
+    is_required?: boolean
+    sync_on_update?: boolean
+  }) => api.put<PropertyMapping>(`/data-mappings/property-mappings/${propId}`, data),
+
+  deletePropertyMapping: (propId: number) =>
+    api.delete(`/data-mappings/property-mappings/${propId}`),
+
+  // Relationship Mappings
+  createRelationshipMapping: (data: {
+    source_entity_mapping_id: number
+    target_entity_mapping_id: number
+    ontology_relationship: string
+    source_fk_field: string
+    target_id_field?: string
+    sync_enabled?: boolean
+  }) => api.post<RelationshipMapping>('/data-mappings/relationship-mappings', data),
+
+  listRelationshipMappings: (sourceId?: number, targetId?: number) =>
+    api.get<RelationshipMapping[]>('/data-mappings/relationship-mappings', {
+      params: { source_entity_mapping_id: sourceId, target_entity_mapping_id: targetId }
+    }),
+
+  deleteRelationshipMapping: (id: number) =>
+    api.delete(`/data-mappings/relationship-mappings/${id}`),
+}

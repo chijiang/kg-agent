@@ -9,6 +9,15 @@ from app.models.graph import (
     SchemaClass,
     SchemaRelationship,
 )
+from app.models.data_product import (
+    DataProduct,
+    EntityMapping,
+    PropertyMapping,
+    RelationshipMapping,
+    SyncLog,
+    ConnectionStatus,
+    SyncDirection,
+)
 
 __all__ = [
     "User",
@@ -21,4 +30,11 @@ __all__ = [
     "GraphRelationship",
     "SchemaClass",
     "SchemaRelationship",
+    "DataProduct",
+    "EntityMapping",
+    "PropertyMapping",
+    "RelationshipMapping",
+    "SyncLog",
+    "ConnectionStatus",
+    "SyncDirection",
 ]

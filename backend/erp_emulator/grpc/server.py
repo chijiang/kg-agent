@@ -4,12 +4,15 @@ Async gRPC server implementation for all ERP services.
 """
 
 import asyncio
+import time
 from datetime import datetime
 from typing import Optional
 import grpc
 from grpc.aio import ServicerContext
+from grpc_reflection.v1alpha import reflection
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, delete
+from sqlalchemy.orm import joinedload
 
 from erp_emulator.database import async_session_maker
 from erp_emulator.models import (
@@ -86,7 +89,15 @@ def map_order_status(status: str) -> int:
 
 def str_to_order_status(status: int) -> str:
     """Map enum value to order status"""
-    mapping = {0: "", 1: "draft", 2: "pending", 3: "confirmed", 4: "partial", 5: "delivered", 6: "cancelled"}
+    mapping = {
+        0: "",
+        1: "draft",
+        2: "pending",
+        3: "confirmed",
+        4: "partial",
+        5: "delivered",
+        6: "cancelled",
+    }
     return mapping.get(status, "")
 
 
@@ -104,7 +115,14 @@ def map_payment_status(status: str) -> int:
 
 def str_to_payment_status(status: int) -> str:
     """Map enum value to payment status"""
-    mapping = {0: "", 1: "pending", 2: "processing", 3: "completed", 4: "failed", 5: "cancelled"}
+    mapping = {
+        0: "",
+        1: "pending",
+        2: "processing",
+        3: "completed",
+        4: "failed",
+        5: "cancelled",
+    }
     return mapping.get(status, "")
 
 
@@ -161,6 +179,7 @@ def str_to_delivery_status(status: int) -> str:
 # Supplier Service
 # ============================================================================
 
+
 class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
     """Supplier service implementation"""
 
@@ -168,9 +187,13 @@ class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
         """Get supplier by ID or code"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Supplier).where(Supplier.id == request.id))
+                result = await db.execute(
+                    select(Supplier).where(Supplier.id == request.id)
+                )
             else:
-                result = await db.execute(select(Supplier).where(Supplier.code == request.code))
+                result = await db.execute(
+                    select(Supplier).where(Supplier.code == request.code)
+                )
 
             supplier = result.scalar_one_or_none()
             if not supplier:
@@ -198,7 +221,9 @@ class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
                 select(Supplier).where(Supplier.code == request.code)
             )
             if existing.scalar_one_or_none():
-                await context.abort(grpc.StatusCode.ALREADY_EXISTS, "Supplier code already exists")
+                await context.abort(
+                    grpc.StatusCode.ALREADY_EXISTS, "Supplier code already exists"
+                )
 
             supplier = Supplier(
                 name=request.name,
@@ -273,9 +298,13 @@ class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
         """Delete supplier"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Supplier).where(Supplier.id == request.id))
+                result = await db.execute(
+                    select(Supplier).where(Supplier.id == request.id)
+                )
             else:
-                result = await db.execute(select(Supplier).where(Supplier.code == request.code))
+                result = await db.execute(
+                    select(Supplier).where(Supplier.code == request.code)
+                )
 
             supplier = result.scalar_one_or_none()
             if not supplier:
@@ -307,27 +336,35 @@ class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
 
             # Apply pagination
             page = request.pagination.page if request.HasField("pagination") else 1
-            page_size = request.pagination.page_size if request.HasField("pagination") else 20
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
 
-            query = query.order_by(Supplier.id).offset((page - 1) * page_size).limit(page_size)
+            query = (
+                query.order_by(Supplier.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
             result = await db.execute(query)
             suppliers = result.scalars().all()
 
             items = []
             for supplier in suppliers:
-                items.append(supplier_pb2.Supplier(
-                    id=supplier.id,
-                    name=supplier.name,
-                    code=supplier.code,
-                    contact_person=supplier.contact_person or "",
-                    email=supplier.email or "",
-                    phone=supplier.phone or "",
-                    address=supplier.address or "",
-                    credit_rating=map_credit_rating(supplier.credit_rating),
-                    status=map_status(supplier.status),
-                    created_at=datetime_to_timestamp(supplier.created_at),
-                    updated_at=datetime_to_timestamp(supplier.updated_at),
-                ))
+                items.append(
+                    supplier_pb2.Supplier(
+                        id=supplier.id,
+                        name=supplier.name,
+                        code=supplier.code,
+                        contact_person=supplier.contact_person or "",
+                        email=supplier.email or "",
+                        phone=supplier.phone or "",
+                        address=supplier.address or "",
+                        credit_rating=map_credit_rating(supplier.credit_rating),
+                        status=map_status(supplier.status),
+                        created_at=datetime_to_timestamp(supplier.created_at),
+                        updated_at=datetime_to_timestamp(supplier.updated_at),
+                    )
+                )
 
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -338,13 +375,14 @@ class SupplierServicer(supplier_pb2_grpc.SupplierServiceServicer):
                     page=page,
                     page_size=page_size,
                     total_pages=total_pages,
-                )
+                ),
             )
 
 
 # ============================================================================
 # Material Service
 # ============================================================================
+
 
 class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
     """Material service implementation"""
@@ -353,9 +391,13 @@ class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
         """Get material by ID or code"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Material).where(Material.id == request.id))
+                result = await db.execute(
+                    select(Material).where(Material.id == request.id)
+                )
             else:
-                result = await db.execute(select(Material).where(Material.code == request.code))
+                result = await db.execute(
+                    select(Material).where(Material.code == request.code)
+                )
 
             material = result.scalar_one_or_none()
             if not material:
@@ -383,7 +425,9 @@ class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
                 select(Material).where(Material.code == request.code)
             )
             if existing.scalar_one_or_none():
-                await context.abort(grpc.StatusCode.ALREADY_EXISTS, "Material code already exists")
+                await context.abort(
+                    grpc.StatusCode.ALREADY_EXISTS, "Material code already exists"
+                )
 
             material = Material(
                 name=request.name,
@@ -458,9 +502,13 @@ class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
         """Delete material"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Material).where(Material.id == request.id))
+                result = await db.execute(
+                    select(Material).where(Material.id == request.id)
+                )
             else:
-                result = await db.execute(select(Material).where(Material.code == request.code))
+                result = await db.execute(
+                    select(Material).where(Material.code == request.code)
+                )
 
             material = result.scalar_one_or_none()
             if not material:
@@ -492,27 +540,35 @@ class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
 
             # Apply pagination
             page = request.pagination.page if request.HasField("pagination") else 1
-            page_size = request.pagination.page_size if request.HasField("pagination") else 20
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
 
-            query = query.order_by(Material.id).offset((page - 1) * page_size).limit(page_size)
+            query = (
+                query.order_by(Material.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
             result = await db.execute(query)
             materials = result.scalars().all()
 
             items = []
             for material in materials:
-                items.append(material_pb2.Material(
-                    id=material.id,
-                    name=material.name,
-                    code=material.code,
-                    category=material.category or "",
-                    unit=material.unit,
-                    standard_price=material.standard_price,
-                    lead_time_days=material.lead_time_days,
-                    min_order_quantity=material.min_order_quantity,
-                    description=material.description or "",
-                    created_at=datetime_to_timestamp(material.created_at),
-                    updated_at=datetime_to_timestamp(material.updated_at),
-                ))
+                items.append(
+                    material_pb2.Material(
+                        id=material.id,
+                        name=material.name,
+                        code=material.code,
+                        category=material.category or "",
+                        unit=material.unit,
+                        standard_price=material.standard_price,
+                        lead_time_days=material.lead_time_days,
+                        min_order_quantity=material.min_order_quantity,
+                        description=material.description or "",
+                        created_at=datetime_to_timestamp(material.created_at),
+                        updated_at=datetime_to_timestamp(material.updated_at),
+                    )
+                )
 
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -523,13 +579,14 @@ class MaterialServicer(material_pb2_grpc.MaterialServiceServicer):
                     page=page,
                     page_size=page_size,
                     total_pages=total_pages,
-                )
+                ),
             )
 
 
 # ============================================================================
 # Payment Service (needed by OrderService for streaming)
 # ============================================================================
+
 
 class PaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
     """Payment service implementation"""
@@ -568,7 +625,11 @@ class PaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
 
             payment = Payment(
                 order_id=request.order_id,
-                payment_date=datetime.fromtimestamp(request.payment_date) if request.payment_date else None,
+                payment_date=(
+                    datetime.fromtimestamp(request.payment_date)
+                    if request.payment_date
+                    else None
+                ),
                 amount=request.amount,
                 payment_method=str_to_payment_method(request.method),
                 status=str_to_payment_status(request.status),
@@ -648,9 +709,13 @@ class PaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
             if request.order_id:
                 query = query.where(Payment.order_id == request.order_id)
             if request.status:
-                query = query.where(Payment.status == str_to_payment_status(request.status))
+                query = query.where(
+                    Payment.status == str_to_payment_status(request.status)
+                )
             if request.method:
-                query = query.where(Payment.payment_method == str_to_payment_method(request.method))
+                query = query.where(
+                    Payment.payment_method == str_to_payment_method(request.method)
+                )
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -659,25 +724,33 @@ class PaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
 
             # Apply pagination
             page = request.pagination.page if request.HasField("pagination") else 1
-            page_size = request.pagination.page_size if request.HasField("pagination") else 20
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
 
-            query = query.order_by(Payment.id).offset((page - 1) * page_size).limit(page_size)
+            query = (
+                query.order_by(Payment.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
             result = await db.execute(query)
             payments = result.scalars().all()
 
             items = []
             for payment in payments:
-                items.append(payment_pb2.Payment(
-                    id=payment.id,
-                    order_id=payment.order_id,
-                    payment_date=datetime_to_timestamp(payment.payment_date),
-                    amount=payment.amount,
-                    method=map_payment_method(payment.payment_method),
-                    status=map_payment_status(payment.status),
-                    reference=payment.reference or "",
-                    notes=payment.notes or "",
-                    created_at=datetime_to_timestamp(payment.created_at),
-                ))
+                items.append(
+                    payment_pb2.Payment(
+                        id=payment.id,
+                        order_id=payment.order_id,
+                        payment_date=datetime_to_timestamp(payment.payment_date),
+                        amount=payment.amount,
+                        method=map_payment_method(payment.payment_method),
+                        status=map_payment_status(payment.status),
+                        reference=payment.reference or "",
+                        notes=payment.notes or "",
+                        created_at=datetime_to_timestamp(payment.created_at),
+                    )
+                )
 
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -688,13 +761,14 @@ class PaymentServicer(payment_pb2_grpc.PaymentServiceServicer):
                     page=page,
                     page_size=page_size,
                     total_pages=total_pages,
-                )
+                ),
             )
 
 
 # ============================================================================
 # Order Service
 # ============================================================================
+
 
 class OrderServicer(order_pb2_grpc.OrderServiceServicer):
     """Order service implementation"""
@@ -723,16 +797,18 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 
             items = []
             for item in order.order_items:
-                items.append(order_pb2.OrderItem(
-                    id=item.id,
-                    order_id=item.order_id,
-                    material_id=item.material_id,
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    subtotal=item.subtotal,
-                    discount_percent=item.discount_percent,
-                    delivery_status=map_delivery_status(item.delivery_status),
-                ))
+                items.append(
+                    order_pb2.OrderItem(
+                        id=item.id,
+                        order_id=item.order_id,
+                        material_id=item.material_id,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        subtotal=item.subtotal,
+                        discount_percent=item.discount_percent,
+                        delivery_status=map_delivery_status(item.delivery_status),
+                    )
+                )
 
             return order_pb2.PurchaseOrder(
                 id=order.id,
@@ -771,7 +847,11 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
                 supplier_id=request.supplier_id,
                 order_number=order_number,
                 status=str_to_order_status(request.status),
-                delivery_date=datetime.fromtimestamp(request.delivery_date) if request.delivery_date else None,
+                delivery_date=(
+                    datetime.fromtimestamp(request.delivery_date)
+                    if request.delivery_date
+                    else None
+                ),
                 payment_terms=request.payment_terms,
                 shipping_address=request.shipping_address or None,
                 notes=request.notes or None,
@@ -787,9 +867,16 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
                     select(Material).where(Material.id == item_req.material_id)
                 )
                 if not material_result.scalar_one_or_none():
-                    await context.abort(grpc.StatusCode.NOT_FOUND, f"Material {item_req.material_id} not found")
+                    await context.abort(
+                        grpc.StatusCode.NOT_FOUND,
+                        f"Material {item_req.material_id} not found",
+                    )
 
-                subtotal = item_req.quantity * item_req.unit_price * (1 - item_req.discount_percent / 100)
+                subtotal = (
+                    item_req.quantity
+                    * item_req.unit_price
+                    * (1 - item_req.discount_percent / 100)
+                )
                 total_amount += subtotal
 
                 item = OrderItem(
@@ -808,6 +895,7 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 
             # Reload with items
             from sqlalchemy.orm import selectinload
+
             result = await db.execute(
                 select(PurchaseOrder)
                 .options(selectinload(PurchaseOrder.order_items))
@@ -817,16 +905,18 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 
             items = []
             for item in order.order_items:
-                items.append(order_pb2.OrderItem(
-                    id=item.id,
-                    order_id=item.order_id,
-                    material_id=item.material_id,
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    subtotal=item.subtotal,
-                    discount_percent=item.discount_percent,
-                    delivery_status=map_delivery_status(item.delivery_status),
-                ))
+                items.append(
+                    order_pb2.OrderItem(
+                        id=item.id,
+                        order_id=item.order_id,
+                        material_id=item.material_id,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        subtotal=item.subtotal,
+                        discount_percent=item.discount_percent,
+                        delivery_status=map_delivery_status(item.delivery_status),
+                    )
+                )
 
             return order_pb2.PurchaseOrder(
                 id=order.id,
@@ -847,7 +937,9 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
     async def UpdateOrder(self, request, context: ServicerContext):
         """Update order"""
         async with async_session_maker() as db:
-            result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == request.id))
+            result = await db.execute(
+                select(PurchaseOrder).where(PurchaseOrder.id == request.id)
+            )
             order = result.scalar_one_or_none()
 
             if not order:
@@ -868,6 +960,7 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
             await db.refresh(order)
 
             from sqlalchemy.orm import selectinload
+
             result = await db.execute(
                 select(PurchaseOrder)
                 .options(selectinload(PurchaseOrder.order_items))
@@ -877,16 +970,18 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 
             items = []
             for item in order.order_items:
-                items.append(order_pb2.OrderItem(
-                    id=item.id,
-                    order_id=item.order_id,
-                    material_id=item.material_id,
-                    quantity=item.quantity,
-                    unit_price=item.unit_price,
-                    subtotal=item.subtotal,
-                    discount_percent=item.discount_percent,
-                    delivery_status=map_delivery_status(item.delivery_status),
-                ))
+                items.append(
+                    order_pb2.OrderItem(
+                        id=item.id,
+                        order_id=item.order_id,
+                        material_id=item.material_id,
+                        quantity=item.quantity,
+                        unit_price=item.unit_price,
+                        subtotal=item.subtotal,
+                        discount_percent=item.discount_percent,
+                        delivery_status=map_delivery_status(item.delivery_status),
+                    )
+                )
 
             return order_pb2.PurchaseOrder(
                 id=order.id,
@@ -908,9 +1003,15 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
         """Delete order"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == request.id))
+                result = await db.execute(
+                    select(PurchaseOrder).where(PurchaseOrder.id == request.id)
+                )
             else:
-                result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.order_number == request.order_number))
+                result = await db.execute(
+                    select(PurchaseOrder).where(
+                        PurchaseOrder.order_number == request.order_number
+                    )
+                )
 
             order = result.scalar_one_or_none()
             if not order:
@@ -930,11 +1031,19 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
             if request.supplier_id:
                 query = query.where(PurchaseOrder.supplier_id == request.supplier_id)
             if request.status:
-                query = query.where(PurchaseOrder.status == str_to_order_status(request.status))
+                query = query.where(
+                    PurchaseOrder.status == str_to_order_status(request.status)
+                )
             if request.order_date_from:
-                query = query.where(PurchaseOrder.order_date >= datetime.fromtimestamp(request.order_date_from))
+                query = query.where(
+                    PurchaseOrder.order_date
+                    >= datetime.fromtimestamp(request.order_date_from)
+                )
             if request.order_date_to:
-                query = query.where(PurchaseOrder.order_date <= datetime.fromtimestamp(request.order_date_to))
+                query = query.where(
+                    PurchaseOrder.order_date
+                    <= datetime.fromtimestamp(request.order_date_to)
+                )
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -943,29 +1052,37 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 
             # Apply pagination
             page = request.pagination.page if request.HasField("pagination") else 1
-            page_size = request.pagination.page_size if request.HasField("pagination") else 20
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
 
-            query = query.order_by(PurchaseOrder.id).offset((page - 1) * page_size).limit(page_size)
+            query = (
+                query.order_by(PurchaseOrder.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
             result = await db.execute(query)
             orders = result.scalars().all()
 
             items = []
             for order in orders:
-                items.append(order_pb2.PurchaseOrder(
-                    id=order.id,
-                    order_number=order.order_number,
-                    supplier_id=order.supplier_id,
-                    status=map_order_status(order.status),
-                    order_date=datetime_to_timestamp(order.order_date),
-                    delivery_date=datetime_to_timestamp(order.delivery_date),
-                    total_amount=order.total_amount,
-                    payment_terms=order.payment_terms,
-                    shipping_address=order.shipping_address or "",
-                    notes=order.notes or "",
-                    created_at=datetime_to_timestamp(order.created_at),
-                    updated_at=datetime_to_timestamp(order.updated_at),
-                    items=[],  # Empty unless requested
-                ))
+                items.append(
+                    order_pb2.PurchaseOrder(
+                        id=order.id,
+                        order_number=order.order_number,
+                        supplier_id=order.supplier_id,
+                        status=map_order_status(order.status),
+                        order_date=datetime_to_timestamp(order.order_date),
+                        delivery_date=datetime_to_timestamp(order.delivery_date),
+                        total_amount=order.total_amount,
+                        payment_terms=order.payment_terms,
+                        shipping_address=order.shipping_address or "",
+                        notes=order.notes or "",
+                        created_at=datetime_to_timestamp(order.created_at),
+                        updated_at=datetime_to_timestamp(order.updated_at),
+                        items=[],  # Empty unless requested
+                    )
+                )
 
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -976,14 +1093,16 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
                     page=page,
                     page_size=page_size,
                     total_pages=total_pages,
-                )
+                ),
             )
 
     async def GetOrderPayments(self, request, context: ServicerContext):
         """Stream payments for an order"""
         async with async_session_maker() as db:
             # Verify order exists
-            result = await db.execute(select(PurchaseOrder).where(PurchaseOrder.id == request.order_id))
+            result = await db.execute(
+                select(PurchaseOrder).where(PurchaseOrder.id == request.order_id)
+            )
             if not result.scalar_one_or_none():
                 await context.abort(grpc.StatusCode.NOT_FOUND, "Order not found")
 
@@ -1014,6 +1133,7 @@ class OrderServicer(order_pb2_grpc.OrderServiceServicer):
 # Contract Service
 # ============================================================================
 
+
 class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
     """Contract service implementation"""
 
@@ -1021,9 +1141,15 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
         """Get contract by ID or number"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Contract).where(Contract.id == request.id))
+                result = await db.execute(
+                    select(Contract).where(Contract.id == request.id)
+                )
             else:
-                result = await db.execute(select(Contract).where(Contract.contract_number == request.contract_number))
+                result = await db.execute(
+                    select(Contract).where(
+                        Contract.contract_number == request.contract_number
+                    )
+                )
 
             contract = result.scalar_one_or_none()
             if not contract:
@@ -1067,7 +1193,10 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
 
             # Validate dates
             if request.end_date and request.end_date <= request.start_date:
-                await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "End date must be after start date")
+                await context.abort(
+                    grpc.StatusCode.INVALID_ARGUMENT,
+                    "End date must be after start date",
+                )
 
             # Generate contract number
             contract_number = f"CTR-{int(time.time())}"
@@ -1077,7 +1206,11 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
                 material_id=request.material_id,
                 contract_number=contract_number,
                 start_date=datetime.fromtimestamp(request.start_date),
-                end_date=datetime.fromtimestamp(request.end_date) if request.end_date else None,
+                end_date=(
+                    datetime.fromtimestamp(request.end_date)
+                    if request.end_date
+                    else None
+                ),
                 agreed_price=request.agreed_price,
                 min_quantity=request.min_quantity,
                 max_quantity=request.max_quantity if request.max_quantity > 0 else None,
@@ -1115,14 +1248,19 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
 
             if request.end_date:
                 if request.end_date <= datetime_to_timestamp(contract.start_date):
-                    await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "End date must be after start date")
+                    await context.abort(
+                        grpc.StatusCode.INVALID_ARGUMENT,
+                        "End date must be after start date",
+                    )
                 contract.end_date = datetime.fromtimestamp(request.end_date)
             if request.agreed_price:
                 contract.agreed_price = request.agreed_price
             if request.min_quantity:
                 contract.min_quantity = request.min_quantity
             if request.max_quantity:
-                contract.max_quantity = request.max_quantity if request.max_quantity > 0 else None
+                contract.max_quantity = (
+                    request.max_quantity if request.max_quantity > 0 else None
+                )
             if request.status:
                 contract.status = str_to_contract_status(request.status)
             if request.terms:
@@ -1151,9 +1289,15 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
         """Delete contract"""
         async with async_session_maker() as db:
             if request.HasField("id"):
-                result = await db.execute(select(Contract).where(Contract.id == request.id))
+                result = await db.execute(
+                    select(Contract).where(Contract.id == request.id)
+                )
             else:
-                result = await db.execute(select(Contract).where(Contract.contract_number == request.contract_number))
+                result = await db.execute(
+                    select(Contract).where(
+                        Contract.contract_number == request.contract_number
+                    )
+                )
 
             contract = result.scalar_one_or_none()
             if not contract:
@@ -1175,7 +1319,9 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
             if request.material_id:
                 query = query.where(Contract.material_id == request.material_id)
             if request.status:
-                query = query.where(Contract.status == str_to_contract_status(request.status))
+                query = query.where(
+                    Contract.status == str_to_contract_status(request.status)
+                )
 
             # Get total count
             count_query = select(func.count()).select_from(query.subquery())
@@ -1184,29 +1330,37 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
 
             # Apply pagination
             page = request.pagination.page if request.HasField("pagination") else 1
-            page_size = request.pagination.page_size if request.HasField("pagination") else 20
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
 
-            query = query.order_by(Contract.id).offset((page - 1) * page_size).limit(page_size)
+            query = (
+                query.order_by(Contract.id)
+                .offset((page - 1) * page_size)
+                .limit(page_size)
+            )
             result = await db.execute(query)
             contracts = result.scalars().all()
 
             items = []
             for contract in contracts:
-                items.append(contract_pb2.Contract(
-                    id=contract.id,
-                    contract_number=contract.contract_number,
-                    supplier_id=contract.supplier_id,
-                    material_id=contract.material_id,
-                    start_date=datetime_to_timestamp(contract.start_date),
-                    end_date=datetime_to_timestamp(contract.end_date),
-                    agreed_price=contract.agreed_price,
-                    min_quantity=contract.min_quantity,
-                    max_quantity=contract.max_quantity or 0.0,
-                    status=map_contract_status(contract.status),
-                    terms=contract.terms or "",
-                    created_at=datetime_to_timestamp(contract.created_at),
-                    updated_at=datetime_to_timestamp(contract.updated_at),
-                ))
+                items.append(
+                    contract_pb2.Contract(
+                        id=contract.id,
+                        contract_number=contract.contract_number,
+                        supplier_id=contract.supplier_id,
+                        material_id=contract.material_id,
+                        start_date=datetime_to_timestamp(contract.start_date),
+                        end_date=datetime_to_timestamp(contract.end_date),
+                        agreed_price=contract.agreed_price,
+                        min_quantity=contract.min_quantity,
+                        max_quantity=contract.max_quantity or 0.0,
+                        status=map_contract_status(contract.status),
+                        terms=contract.terms or "",
+                        created_at=datetime_to_timestamp(contract.created_at),
+                        updated_at=datetime_to_timestamp(contract.updated_at),
+                    )
+                )
 
             total_pages = (total + page_size - 1) // page_size if total > 0 else 0
 
@@ -1217,13 +1371,14 @@ class ContractServicer(contract_pb2_grpc.ContractServiceServicer):
                     page=page,
                     page_size=page_size,
                     total_pages=total_pages,
-                )
+                ),
             )
 
 
 # ============================================================================
 # Admin Service
 # ============================================================================
+
 
 class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
     """Admin service implementation"""
@@ -1246,7 +1401,9 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
             # Check if data already exists
             existing = await db.execute(select(func.count()).select_from(Supplier))
             if existing.scalar() > 0:
-                await context.abort(grpc.StatusCode.ALREADY_EXISTS, "Database already contains data")
+                await context.abort(
+                    grpc.StatusCode.ALREADY_EXISTS, "Database already contains data"
+                )
 
             stats = admin_pb2.SeedStats()
 
@@ -1340,7 +1497,9 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
                     delivery_date=order_date + timedelta(days=random.randint(7, 60)),
                     payment_terms=random.choice(PAYMENT_TERMS),
                     shipping_address=f"Company Warehouse, Building {random.randint(1, 5)}",
-                    notes=random.choice(["", "Urgent delivery", "Quality check required", ""]),
+                    notes=random.choice(
+                        ["", "Urgent delivery", "Quality check required", ""]
+                    ),
                 )
                 orders.append(order)
                 db.add(order)
@@ -1352,7 +1511,9 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
             order_items = []
             for order in orders:
                 num_items = random.randint(1, 5)
-                selected_materials = random.sample(materials, min(num_items, len(materials)))
+                selected_materials = random.sample(
+                    materials, min(num_items, len(materials))
+                )
 
                 for material in selected_materials:
                     quantity = random.randint(10, 500)
@@ -1383,14 +1544,18 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
             # Create payments
             payments = []
             for order in orders:
-                num_payments = random.choices([0, 1, 2, 3], weights=[10, 50, 30, 10], k=1)[0]
+                num_payments = random.choices(
+                    [0, 1, 2, 3], weights=[10, 50, 30, 10], k=1
+                )[0]
 
                 for _ in range(num_payments):
                     payment_amount = min(
                         order.total_amount * random.uniform(0.3, 1.0),
                         order.total_amount,
                     )
-                    payment_date = order.order_date + timedelta(days=random.randint(0, 90))
+                    payment_date = order.order_date + timedelta(
+                        days=random.randint(0, 90)
+                    )
 
                     payment = Payment(
                         order_id=order.id,
@@ -1429,11 +1594,21 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
     async def GetDatabaseStats(self, request, context: ServicerContext):
         """Get database statistics"""
         async with async_session_maker() as db:
-            suppliers_count = await db.execute(select(func.count()).select_from(Supplier))
-            materials_count = await db.execute(select(func.count()).select_from(Material))
-            contracts_count = await db.execute(select(func.count()).select_from(Contract))
-            orders_count = await db.execute(select(func.count()).select_from(PurchaseOrder))
-            order_items_count = await db.execute(select(func.count()).select_from(OrderItem))
+            suppliers_count = await db.execute(
+                select(func.count()).select_from(Supplier)
+            )
+            materials_count = await db.execute(
+                select(func.count()).select_from(Material)
+            )
+            contracts_count = await db.execute(
+                select(func.count()).select_from(Contract)
+            )
+            orders_count = await db.execute(
+                select(func.count()).select_from(PurchaseOrder)
+            )
+            order_items_count = await db.execute(
+                select(func.count()).select_from(OrderItem)
+            )
             payments_count = await db.execute(select(func.count()).select_from(Payment))
 
             stats = admin_pb2.SeedStats(
@@ -1452,6 +1627,7 @@ class AdminServicer(admin_pb2_grpc.AdminServiceServicer):
 # Server
 # ============================================================================
 
+
 async def serve():
     """Start gRPC server"""
     server = grpc.aio.server()
@@ -1463,6 +1639,18 @@ async def serve():
     payment_pb2_grpc.add_PaymentServiceServicer_to_server(PaymentServicer(), server)
     contract_pb2_grpc.add_ContractServiceServicer_to_server(ContractServicer(), server)
     admin_pb2_grpc.add_AdminServiceServicer_to_server(AdminServicer(), server)
+
+    # Enable reflection
+    SERVICE_NAMES = (
+        supplier_pb2.DESCRIPTOR.services_by_name["SupplierService"].full_name,
+        material_pb2.DESCRIPTOR.services_by_name["MaterialService"].full_name,
+        order_pb2.DESCRIPTOR.services_by_name["OrderService"].full_name,
+        payment_pb2.DESCRIPTOR.services_by_name["PaymentService"].full_name,
+        contract_pb2.DESCRIPTOR.services_by_name["ContractService"].full_name,
+        admin_pb2.DESCRIPTOR.services_by_name["AdminService"].full_name,
+        reflection.SERVICE_NAME,
+    )
+    reflection.enable_server_reflection(SERVICE_NAMES, server)
 
     # Listen on port 6689
     server.add_insecure_port("[::]:6689")

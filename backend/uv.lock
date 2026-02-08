@@ -840,6 +840,19 @@ wheels = [
 ]
 
 [[package]]
+name = "grpcio-reflection"
+version = "1.78.0"
+source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
+dependencies = [
+    { name = "grpcio" },
+    { name = "protobuf" },
+]
+sdist = { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/31/06/337546aae558675f79cae2a8c1ce0c9b1952cbc5c28b01878f68d040f5bb/grpcio_reflection-1.78.0.tar.gz", hash = "sha256:e6e60c0b85dbcdf963b4d4d150c0f1d238ba891d805b575c52c0365d07fc0c40", size = 19098, upload-time = "2026-02-06T10:01:52.225Z" }
+wheels = [
+    { url = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/packages/df/6d/4d095d27ccd049865ecdafc467754e9e47ad0f677a30dda969c3590f6582/grpcio_reflection-1.78.0-py3-none-any.whl", hash = "sha256:06fcfde9e6888cdd12e9dd1cf6dc7c440c2e9acf420f696ccbe008672ed05b60", size = 22800, upload-time = "2026-02-06T10:01:33.822Z" },
+]
+
+[[package]]
 name = "grpcio-tools"
 version = "1.78.0"
 source = { registry = "https://mirrors.tuna.tsinghua.edu.cn/pypi/web/simple" }
@@ -1253,6 +1266,7 @@ dependencies = [
     { name = "fastmcp" },
     { name = "greenlet" },
     { name = "grpcio" },
+    { name = "grpcio-reflection" },
     { name = "grpcio-tools" },
     { name = "httpcore", extra = ["socks"] },
     { name = "httpx", extra = ["socks"] },
@@ -1291,6 +1305,7 @@ requires-dist = [
     { name = "fastmcp" },
     { name = "greenlet", specifier = ">=3.3.1" },
     { name = "grpcio", specifier = ">=1.60.0" },
+    { name = "grpcio-reflection", specifier = ">=1.78.0" },
     { name = "grpcio-tools", specifier = ">=1.60.0" },
     { name = "httpcore", extras = ["socks"], specifier = ">=1.0.9" },
     { name = "httpx", extras = ["socks"], specifier = ">=0.28.1" },

@@ -29,6 +29,7 @@ dependencies = [
     "fastmcp",
     "grpcio>=1.60.0",
     "grpcio-tools>=1.60.0",
+    "grpcio-reflection>=1.78.0",
 ]
 
 [dependency-groups]
