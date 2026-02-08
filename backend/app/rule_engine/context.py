@@ -11,7 +11,7 @@ class EvaluationContext:
 
     entity: dict[str, Any]
     old_values: dict[str, Any]
-    session: Optional[SQLAsyncSession] = None  # PostgreSQL DB session (renamed from Neo4j session)
+    session: Optional[SQLAsyncSession] = None  # PostgreSQL DB session
     variables: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -67,13 +67,13 @@ class EvaluationContext:
             if isinstance(obj, dict):
                 # Try direct access first
                 val = obj.get(part)
-                
+
                 # If not found and it's the first level after 'this', check 'properties'
                 if val is None and root_name == "this" and i == 0:
                     props = obj.get("properties", {})
                     if isinstance(props, dict):
                         val = props.get(part)
-                
+
                 obj = val
             else:
                 return None

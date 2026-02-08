@@ -161,6 +161,7 @@ export interface ActionRuntimeInfo {
   parameters: ActionParameter[]
   precondition_count: number
   has_effect: boolean
+  description?: string
 }
 
 export interface ActionInfo {
@@ -168,12 +169,14 @@ export interface ActionInfo {
   name: string
   entity_type: string
   is_active: boolean
+  description?: string
   created_at: string
   updated_at: string
 }
 
 export interface ActionDetail extends ActionInfo {
   dsl_content: string
+  description?: string
 }
 
 export const rulesApi = {

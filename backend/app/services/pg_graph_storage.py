@@ -3,7 +3,6 @@
 PostgreSQL 图存储服务
 
 使用 PostgreSQL + SQL/PGQ 实现图数据存储和查询。
-替代原有的 Neo4j GraphTools 类。
 
 主要功能：
 1. Schema 层操作：类定义、关系定义
@@ -15,17 +14,30 @@ import logging
 from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import (
-    select, update, delete, func, and_, or_, text,
-    insert, literal_column, case
+    select,
+    update,
+    delete,
+    func,
+    and_,
+    or_,
+    text,
+    insert,
+    literal_column,
+    case,
 )
 from sqlalchemy.orm import selectinload
-from app.models.graph import GraphEntity, GraphRelationship, SchemaClass, SchemaRelationship
+from app.models.graph import (
+    GraphEntity,
+    GraphRelationship,
+    SchemaClass,
+    SchemaRelationship,
+)
 
 logger = logging.getLogger(__name__)
 
 
 class PGGraphStorage:
-    """PostgreSQL 图存储服务 - 替代 Neo4j GraphTools
+    """PostgreSQL 图存储服务
 
     提供与原 GraphTools 兼容的接口，方便迁移。
     """
@@ -65,7 +77,9 @@ class PGGraphStorage:
         )
         self.event_emitter.emit(event)
 
-    async def _emit_graph_view_event(self, nodes: List[Dict], edges: List[Dict]) -> None:
+    async def _emit_graph_view_event(
+        self, nodes: List[Dict], edges: List[Dict]
+    ) -> None:
         """触发图谱预览事件"""
         if self.event_emitter is None:
             return
@@ -90,8 +104,7 @@ class PGGraphStorage:
         # 获取旧值
         result = await self.db.execute(
             select(GraphEntity).where(
-                GraphEntity.name == entity_id,
-                GraphEntity.entity_type == entity_type
+                GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type
             )
         )
         entity = result.scalar_one_or_none()
@@ -106,7 +119,9 @@ class PGGraphStorage:
 
         await self.db.execute(
             update(GraphEntity)
-            .where(GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type)
+            .where(
+                GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type
+            )
             .values(properties=new_properties)
         )
         await self.db.commit()
@@ -131,7 +146,7 @@ class PGGraphStorage:
             {
                 "name": c.name,
                 "label": c.label,
-                "dataProperties": c.data_properties or []
+                "dataProperties": c.data_properties or [],
             }
             for c in classes
         ]
@@ -142,9 +157,10 @@ class PGGraphStorage:
             select(
                 SchemaClass.name.label("source_class"),
                 SchemaRelationship.relationship_type.label("relationship"),
-                SchemaClass.name.label("target_class")
+                SchemaClass.name.label("target_class"),
+            ).join(
+                SchemaRelationship, SchemaClass.id == SchemaRelationship.source_class_id
             )
-            .join(SchemaRelationship, SchemaClass.id == SchemaRelationship.source_class_id)
         )
         # 需要更复杂的查询来同时获取 source 和 target
         result = await self.db.execute(
@@ -157,7 +173,7 @@ class PGGraphStorage:
             {
                 "source": r.source_class.name,
                 "type": r.relationship_type,
-                "target": r.target_class.name
+                "target": r.target_class.name,
             }
             for r in rels
         ]
@@ -176,7 +192,7 @@ class PGGraphStorage:
         class_data = {
             "name": cls.name,
             "label": cls.label,
-            "dataProperties": cls.data_properties or []
+            "dataProperties": cls.data_properties or [],
         }
 
         # 获取该类的关系
@@ -187,7 +203,7 @@ class PGGraphStorage:
             .where(
                 or_(
                     SchemaRelationship.source_class_id == cls.id,
-                    SchemaRelationship.target_class_id == cls.id
+                    SchemaRelationship.target_class_id == cls.id,
                 )
             )
         )
@@ -196,15 +212,19 @@ class PGGraphStorage:
         relationships_data = []
         for r in rels:
             if r.source_class_id == cls.id:
-                relationships_data.append({
-                    "relationship": r.relationship_type,
-                    "target_class": r.target_class.name
-                })
+                relationships_data.append(
+                    {
+                        "relationship": r.relationship_type,
+                        "target_class": r.target_class.name,
+                    }
+                )
             else:
-                relationships_data.append({
-                    "relationship": r.relationship_type,
-                    "source_class": r.source_class.name
-                })
+                relationships_data.append(
+                    {
+                        "relationship": r.relationship_type,
+                        "source_class": r.source_class.name,
+                    }
+                )
 
         return {"class": class_data, "relationships": relationships_data}
 
@@ -215,8 +235,7 @@ class PGGraphStorage:
     ) -> List[Dict]:
         """根据名称搜索实例节点"""
         query = select(GraphEntity).where(
-            GraphEntity.name.ilike(f"%{search_term}%"),
-            GraphEntity.is_instance == True
+            GraphEntity.name.ilike(f"%{search_term}%"), GraphEntity.is_instance == True
         )
 
         if class_name:
@@ -231,9 +250,10 @@ class PGGraphStorage:
                 "name": e.name,
                 "labels": [e.entity_type],
                 "properties": {
-                    k: v for k, v in (e.properties or {}).items()
+                    k: v
+                    for k, v in (e.properties or {}).items()
                     if not k.startswith("__")
-                }
+                },
             }
             for e in entities
         ]
@@ -241,13 +261,15 @@ class PGGraphStorage:
         # 触发可视化事件
         nodes = []
         for r in results:
-            nodes.append({
-                "id": r["name"],
-                "label": r["name"],
-                "type": r["labels"][0] if r["labels"] else "Entity",
-                "properties": r["properties"]
-            })
-        
+            nodes.append(
+                {
+                    "id": r["name"],
+                    "label": r["name"],
+                    "type": r["labels"][0] if r["labels"] else "Entity",
+                    "properties": r["properties"],
+                }
+            )
+
         if nodes:
             await self._emit_graph_view_event(nodes=nodes, edges=[])
 
@@ -342,8 +364,7 @@ class PGGraphStorage:
         # 先获取起始节点
         result = await self.db.execute(
             select(GraphEntity.id).where(
-                GraphEntity.name == instance_name,
-                GraphEntity.is_instance == True
+                GraphEntity.name == instance_name, GraphEntity.is_instance == True
             )
         )
         start_node = result.scalar_one_or_none()
@@ -360,16 +381,24 @@ class PGGraphStorage:
             neighbors = []
             for row in rel_result.all():
                 rel, entity = row
-                neighbors.append({
-                    "name": entity.name,
-                    "labels": [entity.entity_type],
-                    "properties": {k: v for k, v in (entity.properties or {}).items() if not k.startswith("__")},
-                    "relationships": [{
-                        "type": rel.relationship_type,
-                        "source": instance_name,
-                        "target": entity.name
-                    }]
-                })
+                neighbors.append(
+                    {
+                        "name": entity.name,
+                        "labels": [entity.entity_type],
+                        "properties": {
+                            k: v
+                            for k, v in (entity.properties or {}).items()
+                            if not k.startswith("__")
+                        },
+                        "relationships": [
+                            {
+                                "type": rel.relationship_type,
+                                "source": instance_name,
+                                "target": entity.name,
+                            }
+                        ],
+                    }
+                )
             return neighbors
 
         elif direction == "incoming":
@@ -381,26 +410,33 @@ class PGGraphStorage:
             neighbors = []
             for row in rel_result.all():
                 rel, entity = row
-                neighbors.append({
-                    "name": entity.name,
-                    "labels": [entity.entity_type],
-                    "properties": {k: v for k, v in (entity.properties or {}).items() if not k.startswith("__")},
-                    "relationships": [{
-                        "type": rel.relationship_type,
-                        "source": entity.name,
-                        "target": instance_name
-                    }]
-                })
+                neighbors.append(
+                    {
+                        "name": entity.name,
+                        "labels": [entity.entity_type],
+                        "properties": {
+                            k: v
+                            for k, v in (entity.properties or {}).items()
+                            if not k.startswith("__")
+                        },
+                        "relationships": [
+                            {
+                                "type": rel.relationship_type,
+                                "source": entity.name,
+                                "target": instance_name,
+                            }
+                        ],
+                    }
+                )
             return neighbors
 
         else:  # both
             # 查询所有关联的关系和实体
             rel_result = await self.db.execute(
-                select(GraphRelationship)
-                .where(
+                select(GraphRelationship).where(
                     or_(
                         GraphRelationship.source_id == start_node,
-                        GraphRelationship.target_id == start_node
+                        GraphRelationship.target_id == start_node,
                     )
                 )
             )
@@ -426,46 +462,70 @@ class PGGraphStorage:
             # 组装结果
             neighbors = []
             for rel in rels:
-                neighbor_id = rel.target_id if rel.source_id == start_node else rel.source_id
+                neighbor_id = (
+                    rel.target_id if rel.source_id == start_node else rel.source_id
+                )
                 entity = entities.get(neighbor_id)
                 if entity:
-                    neighbors.append({
-                        "name": entity.name,
-                        "labels": [entity.entity_type],
-                        "properties": {k: v for k, v in (entity.properties or {}).items() if not k.startswith("__")},
-                        "relationships": [{
-                            "type": rel.relationship_type,
-                            "source": instance_name if rel.source_id == start_node else entity.name,
-                            "target": entity.name if rel.source_id == start_node else instance_name
-                        }]
-                    })
-            
+                    neighbors.append(
+                        {
+                            "name": entity.name,
+                            "labels": [entity.entity_type],
+                            "properties": {
+                                k: v
+                                for k, v in (entity.properties or {}).items()
+                                if not k.startswith("__")
+                            },
+                            "relationships": [
+                                {
+                                    "type": rel.relationship_type,
+                                    "source": (
+                                        instance_name
+                                        if rel.source_id == start_node
+                                        else entity.name
+                                    ),
+                                    "target": (
+                                        entity.name
+                                        if rel.source_id == start_node
+                                        else instance_name
+                                    ),
+                                }
+                            ],
+                        }
+                    )
+
             # 触发可视化事件
             viz_nodes = []
             viz_edges = []
-            
+
             # 起始节点
-            viz_nodes.append({
-                "id": instance_name,
-                "label": instance_name,
-                "type": "Entity",
-                "properties": {}
-            })
-            
+            viz_nodes.append(
+                {
+                    "id": instance_name,
+                    "label": instance_name,
+                    "type": "Entity",
+                    "properties": {},
+                }
+            )
+
             for n in neighbors:
-                viz_nodes.append({
-                    "id": n["name"],
-                    "label": n["name"],
-                    "type": n["labels"][0] if n["labels"] else "Entity",
-                    "properties": n["properties"]
-                })
+                viz_nodes.append(
+                    {
+                        "id": n["name"],
+                        "label": n["name"],
+                        "type": n["labels"][0] if n["labels"] else "Entity",
+                        "properties": n["properties"],
+                    }
+                )
                 for r in n["relationships"]:
-                    viz_edges.append({
-                        "source": r["source"],
-                        "target": r["target"],
-                        "label": r["type"]
-                    })
-            
+                    viz_edges.append(
+                        {
+                            "source": r["source"],
+                            "target": r["target"],
+                            "label": r["type"],
+                        }
+                    )
+
             if viz_nodes:
                 await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
 
@@ -478,8 +538,7 @@ class PGGraphStorage:
         # 获取起始节点 ID
         result = await self.db.execute(
             select(GraphEntity.id).where(
-                GraphEntity.name == instance_name,
-                GraphEntity.is_instance == True
+                GraphEntity.name == instance_name, GraphEntity.is_instance == True
             )
         )
         start_id = result.scalar_one_or_none()
@@ -498,7 +557,8 @@ class PGGraphStorage:
             target_condition = "r.target_id = current_id"
 
         # 使用原生 SQL 递归查询
-        sql_query = text(f"""
+        sql_query = text(
+            f"""
         WITH RECURSIVE neighbor_search AS (
             -- 基础：起始节点
             SELECT
@@ -534,7 +594,8 @@ class PGGraphStorage:
         FROM neighbor_search
         WHERE depth > 1
         LIMIT 100
-        """)
+        """
+        )
 
         result = await self.db.execute(sql_query, {"start_id": start_id, "hops": hops})
         rows = result.fetchall()
@@ -543,8 +604,14 @@ class PGGraphStorage:
             {
                 "name": row[1],
                 "labels": [row[2]],
-                "properties": {k: v for k, v in (row[3] or {}).items() if not k.startswith("__")},
-                "relationships": [{"type": row[4], "source": instance_name, "target": row[1]}] if row[4] else []
+                "properties": {
+                    k: v for k, v in (row[3] or {}).items() if not k.startswith("__")
+                },
+                "relationships": (
+                    [{"type": row[4], "source": instance_name, "target": row[1]}]
+                    if row[4]
+                    else []
+                ),
             }
             for row in rows
         ]
@@ -552,29 +619,31 @@ class PGGraphStorage:
         # 触发可视化事件
         viz_nodes = []
         viz_edges = []
-        
+
         # 起始节点
-        viz_nodes.append({
-            "id": instance_name,
-            "label": instance_name,
-            "type": "Entity",
-            "properties": {}
-        })
-        
+        viz_nodes.append(
+            {
+                "id": instance_name,
+                "label": instance_name,
+                "type": "Entity",
+                "properties": {},
+            }
+        )
+
         for n in results:
-            viz_nodes.append({
-                "id": n["name"],
-                "label": n["name"],
-                "type": n["labels"][0] if n["labels"] else "Entity",
-                "properties": n["properties"]
-            })
+            viz_nodes.append(
+                {
+                    "id": n["name"],
+                    "label": n["name"],
+                    "type": n["labels"][0] if n["labels"] else "Entity",
+                    "properties": n["properties"],
+                }
+            )
             for r in n["relationships"]:
-                viz_edges.append({
-                    "source": r["source"],
-                    "target": r["target"],
-                    "label": r["type"]
-                })
-        
+                viz_edges.append(
+                    {"source": r["source"], "target": r["target"], "label": r["type"]}
+                )
+
         if viz_nodes:
             await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
 
@@ -593,8 +662,7 @@ class PGGraphStorage:
         # 获取起点和终点节点
         result = await self.db.execute(
             select(GraphEntity.id, GraphEntity.name, GraphEntity.entity_type).where(
-                GraphEntity.name == start_name,
-                GraphEntity.is_instance == True
+                GraphEntity.name == start_name, GraphEntity.is_instance == True
             )
         )
         start = result.one_or_none()
@@ -603,8 +671,7 @@ class PGGraphStorage:
 
         result = await self.db.execute(
             select(GraphEntity.id, GraphEntity.name, GraphEntity.entity_type).where(
-                GraphEntity.name == end_name,
-                GraphEntity.is_instance == True
+                GraphEntity.name == end_name, GraphEntity.is_instance == True
             )
         )
         end = result.one_or_none()
@@ -612,7 +679,8 @@ class PGGraphStorage:
             return None
 
         # 使用 BFS 递归 CTE 查找最短路径
-        path_query = text("""
+        path_query = text(
+            """
         WITH RECURSIVE shortest_path AS (
             -- 起点
             SELECT
@@ -669,11 +737,12 @@ class PGGraphStorage:
         WHERE path_names[array_length(path_names, 1)] = :end_name
         ORDER BY array_length(path_names, 1) ASC
         LIMIT 1
-        """)
+        """
+        )
 
         result = await self.db.execute(
             path_query,
-            {"start_id": start[0], "end_name": end_name, "max_depth": max_depth}
+            {"start_id": start[0], "end_name": end_name, "max_depth": max_depth},
         )
         row = result.first()
 
@@ -691,22 +760,22 @@ class PGGraphStorage:
         # 构建关系列表
         relationships = []
         for i, rel_type in enumerate(rel_types):
-            relationships.append({
-                "type": rel_type,
-                "source": path_names[i],
-                "target": path_names[i + 1]
-            })
-        
+            relationships.append(
+                {"type": rel_type, "source": path_names[i], "target": path_names[i + 1]}
+            )
+
         # 触发可视化事件
         viz_nodes = []
         for n in nodes:
-            viz_nodes.append({
-                "id": n["name"],
-                "label": n["name"],
-                "type": n["labels"][0] if n["labels"] else "Entity",
-                "properties": {} # 路径查询结果中没有属性，这里简化
-            })
-            
+            viz_nodes.append(
+                {
+                    "id": n["name"],
+                    "label": n["name"],
+                    "type": n["labels"][0] if n["labels"] else "Entity",
+                    "properties": {},  # 路径查询结果中没有属性，这里简化
+                }
+            )
+
         if viz_nodes:
             await self._emit_graph_view_event(nodes=viz_nodes, edges=relationships)
 
@@ -717,8 +786,7 @@ class PGGraphStorage:
     ) -> List[Dict]:
         """获取某个类的所有实例"""
         query = select(GraphEntity).where(
-            GraphEntity.entity_type == class_name,
-            GraphEntity.is_instance == True
+            GraphEntity.entity_type == class_name, GraphEntity.is_instance == True
         )
 
         # 应用过滤条件（JSONB 属性查询）
@@ -735,33 +803,37 @@ class PGGraphStorage:
             {
                 "name": e.name,
                 "properties": {
-                    k: v for k, v in (e.properties or {}).items()
+                    k: v
+                    for k, v in (e.properties or {}).items()
                     if not k.startswith("__")
-                }
+                },
             }
             for e in entities
         ]
-        
+
         # 触发可视化事件
         nodes = []
         for r in results:
-            nodes.append({
-                "id": r["name"],
-                "label": r["name"],
-                "type": class_name,
-                "properties": r["properties"]
-            })
-        
+            nodes.append(
+                {
+                    "id": r["name"],
+                    "label": r["name"],
+                    "type": class_name,
+                    "properties": r["properties"],
+                }
+            )
+
         if nodes:
             await self._emit_graph_view_event(nodes=nodes, edges=[])
 
         return results
 
-    async def get_entity_by_name(self, name: str, entity_type: Optional[str] = None) -> Optional[Dict]:
+    async def get_entity_by_name(
+        self, name: str, entity_type: Optional[str] = None
+    ) -> Optional[Dict]:
         """根据名称获取实体详情"""
         query = select(GraphEntity).where(
-            GraphEntity.name == name,
-            GraphEntity.is_instance == True
+            GraphEntity.name == name, GraphEntity.is_instance == True
         )
         if entity_type:
             query = query.where(GraphEntity.entity_type == entity_type)
@@ -776,7 +848,7 @@ class PGGraphStorage:
             "id": entity.id,
             "name": entity.name,
             "entity_type": entity.entity_type,
-            "properties": entity.properties or {}
+            "properties": entity.properties or {},
         }
 
     # ==================== 统计查询 ====================
@@ -786,10 +858,9 @@ class PGGraphStorage:
         if node_label:
             # 按类型统计
             result = await self.db.execute(
-                select(func.count(GraphEntity.id))
-                .where(
+                select(func.count(GraphEntity.id)).where(
                     GraphEntity.entity_type == node_label,
-                    GraphEntity.is_instance == True
+                    GraphEntity.is_instance == True,
                 )
             )
             total_count = result.scalar() or 0
@@ -799,22 +870,18 @@ class PGGraphStorage:
                 select(GraphEntity.name)
                 .where(
                     GraphEntity.entity_type == node_label,
-                    GraphEntity.is_instance == True
+                    GraphEntity.is_instance == True,
                 )
                 .limit(5)
             )
             sample_names = [row[0] for row in result.all()]
 
-            return {
-                "total_count": total_count,
-                "sample_names": sample_names
-            }
+            return {"total_count": total_count, "sample_names": sample_names}
         else:
             # 按类型分布统计
             result = await self.db.execute(
                 select(
-                    GraphEntity.entity_type,
-                    func.count(GraphEntity.id).label("count")
+                    GraphEntity.entity_type, func.count(GraphEntity.id).label("count")
                 )
                 .where(GraphEntity.is_instance == True)
                 .group_by(GraphEntity.entity_type)
@@ -822,8 +889,7 @@ class PGGraphStorage:
                 .limit(20)
             )
             distribution = [
-                {"labels": [row[0]], "count": row[1]}
-                for row in result.all()
+                {"labels": [row[0]], "count": row[1]} for row in result.all()
             ]
             return {"label_distribution": distribution}
 
@@ -832,17 +898,14 @@ class PGGraphStorage:
         result = await self.db.execute(
             select(
                 GraphRelationship.relationship_type,
-                func.count(GraphRelationship.id).label("count")
+                func.count(GraphRelationship.id).label("count"),
             )
             .group_by(GraphRelationship.relationship_type)
             .order_by(func.count(GraphRelationship.id).desc())
             .limit(50)
         )
 
-        return [
-            {"relationship_type": row[0], "count": row[1]}
-            for row in result.all()
-        ]
+        return [{"relationship_type": row[0], "count": row[1]} for row in result.all()]
 
     async def get_graph_statistics(self) -> Dict:
         """获取图的整体统计信息"""
@@ -853,15 +916,11 @@ class PGGraphStorage:
         node_count = node_count.scalar() or 0
 
         # 关系总数
-        rel_count = await self.db.execute(
-            select(func.count(GraphRelationship.id))
-        )
+        rel_count = await self.db.execute(select(func.count(GraphRelationship.id)))
         rel_count = rel_count.scalar() or 0
 
         # 类定义数
-        class_count = await self.db.execute(
-            select(func.count(SchemaClass.id))
-        )
+        class_count = await self.db.execute(select(func.count(SchemaClass.id)))
         class_count = class_count.scalar() or 0
 
         # 类关系定义数
@@ -874,5 +933,5 @@ class PGGraphStorage:
             "total_nodes": node_count,
             "total_relationships": rel_count,
             "total_classes": class_count,
-            "total_schema_relationships": schema_rel_count
+            "total_schema_relationships": schema_rel_count,
         }

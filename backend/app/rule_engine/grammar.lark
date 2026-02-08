@@ -1,9 +1,11 @@
 start: (action_def | rule_def)*
 
 // ACTION Definition
-action_def: "ACTION" entity_action "{" precondition+ effect? "}"
+action_def: "ACTION" entity_action "{" description? precondition+ effect? "}"
 
 entity_action: CNAME "." CNAME ["(" param_list? ")"]
+
+description: "DESCRIPTION" ":" STRING
 
 param_list: param ("," param)*
 param: CNAME ":" CNAME ["?"]

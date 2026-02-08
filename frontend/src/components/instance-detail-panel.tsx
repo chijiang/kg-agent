@@ -298,7 +298,14 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                                 return (
                                     <div key={actionKey} className="flex flex-col gap-2 p-3 border rounded-lg bg-white shadow-sm hover:border-emerald-200 transition-colors">
                                         <div className="flex items-center justify-between gap-4">
-                                            <span className="text-sm font-medium text-gray-700">{action.action_name}</span>
+                                            <div className="flex flex-col gap-0.5">
+                                                <span className="text-sm font-medium text-gray-700">{action.action_name}</span>
+                                                {action.description && (
+                                                    <span className="text-[10px] text-gray-400 italic leading-tight">
+                                                        {action.description}
+                                                    </span>
+                                                )}
+                                            </div>
                                             <Button
                                                 variant="outline"
                                                 size="sm"

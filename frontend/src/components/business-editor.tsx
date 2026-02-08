@@ -82,6 +82,8 @@ interface BusinessEditorProps {
             property: string | null;
         };
         entityType?: string; // For ACTION
+        description?: string; // For ACTION
+        parameters?: { name: string; type: string; optional: boolean }[]; // For ACTION
     };
 }
 
@@ -155,7 +157,14 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
     const stack: LogicBlockData[][] = [statements];
     let isInEffect = mode === 'RULE'; // Rules don't have EFFECT wrapper, Actions do.
 
-    lines.forEach(line => {
+    lines.forEach((line, index) => {
+        // Description (Action only)
+        if (mode === 'ACTION' && line.startsWith('DESCRIPTION:')) {
+            // Description is usually handled in the parent component or via meta,
+            // but we can extract it if needed. However, meta is usually passed from outside.
+            return;
+        }
+
         // Preconditions (Action only)
         if (mode === 'ACTION' && line.startsWith('PRECONDITION')) {
             const match = line.match(/PRECONDITION\s+(\w+):\s*(.*)/);
@@ -232,6 +241,36 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
     });
 
     return { statements, preconditions };
+};
+
+export const parseActionSignature = (dsl: string): { entityType: string, actionName: string, parameters: { name: string; type: string; optional: boolean }[] } | null => {
+    const lines = dsl.split('\n');
+    const actionLine = lines.find(l => l.trim().startsWith('ACTION'));
+    if (!actionLine) return null;
+
+    const match = actionLine.match(/ACTION\s+([\w.]+)\s*(?:\((.*)\))?\s*\{/);
+    if (!match) return null;
+
+    const fullPath = match[1];
+    const [entityType, actionName] = fullPath.split('.');
+    const paramsStr = match[2];
+    const parameters: { name: string; type: string; optional: boolean }[] = [];
+
+    if (paramsStr) {
+        const paramParts = paramsStr.split(',').map(p => p.trim());
+        paramParts.forEach(p => {
+            const pMatch = p.match(/(\w+):\s*(\w+)(\?)?/);
+            if (pMatch) {
+                parameters.push({
+                    name: pMatch[1],
+                    type: pMatch[2],
+                    optional: !!pMatch[3]
+                });
+            }
+        });
+    }
+
+    return { entityType, actionName, parameters };
 };
 
 // --- Components ---
@@ -315,31 +354,35 @@ const LogicBlock = ({
                         )}
 
                         {data.type === 'PRECONDITION' && (
-                            <>
-                                <input
-                                    type="text"
-                                    value={data.label || ''}
-                                    onChange={(e) => updateStatement(id, 'label', e.target.value)}
-                                    placeholder="name"
-                                    className="px-2 py-1 border border-slate-200 rounded w-24 text-slate-700 focus:border-emerald-500 outline-none font-mono text-xs bg-white"
-                                />
-                                <span className="text-slate-400 text-xs">:</span>
-                                <input
-                                    type="text"
-                                    value={data.conditions || ''}
-                                    onChange={(e) => updateStatement(id, 'conditions', e.target.value)}
-                                    placeholder="expression"
-                                    className="flex-1 min-w-[150px] px-2 py-1 border border-slate-200 rounded text-slate-700 focus:border-emerald-500 outline-none font-mono text-xs bg-white"
-                                />
-                                <span className="text-slate-400 text-[10px] uppercase font-bold">Failure msg:</span>
-                                <input
-                                    type="text"
-                                    value={data.onFailure || ''}
-                                    onChange={(e) => updateStatement(id, 'onFailure', e.target.value)}
-                                    placeholder="error message"
-                                    className="w-32 px-2 py-1 border border-slate-200 rounded text-slate-700 focus:border-emerald-500 outline-none text-xs bg-white"
-                                />
-                            </>
+                            <div className="flex flex-col gap-2 flex-1">
+                                <div className="flex items-center gap-2">
+                                    <input
+                                        type="text"
+                                        value={data.label || ''}
+                                        onChange={(e) => updateStatement(id, 'label', e.target.value)}
+                                        placeholder="name"
+                                        className="px-2 py-1 border border-slate-200 rounded w-24 text-slate-700 focus:border-emerald-500 outline-none font-mono text-xs bg-white"
+                                    />
+                                    <span className="text-slate-400 text-xs">:</span>
+                                    <input
+                                        type="text"
+                                        value={data.conditions || ''}
+                                        onChange={(e) => updateStatement(id, 'conditions', e.target.value)}
+                                        placeholder="expression"
+                                        className="flex-1 min-w-[150px] px-2 py-1 border border-slate-200 rounded text-slate-700 focus:border-emerald-500 outline-none font-mono text-xs bg-white"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-2">
+                                    <span className="text-slate-400 text-[10px] uppercase font-bold flex-shrink-0">Failure Message:</span>
+                                    <input
+                                        type="text"
+                                        value={data.onFailure || ''}
+                                        onChange={(e) => updateStatement(id, 'onFailure', e.target.value)}
+                                        placeholder="Describe the error if this check fails..."
+                                        className="flex-1 px-2 py-1 border border-slate-200 rounded text-slate-700 focus:border-emerald-500 outline-none text-xs bg-white italic"
+                                    />
+                                </div>
+                            </div>
                         )}
 
                         {data.type === 'TRIGGER' && (
@@ -474,6 +517,14 @@ const LogicBlock = ({
 export default function BusinessEditor({ mode, initialDsl, onDslChange, schema, meta }: BusinessEditorProps) {
     const [statements, setStatements] = useState<LogicBlockData[]>([]);
     const [preconditions, setPreconditions] = useState<LogicBlockData[]>([]);
+    const [description, setDescription] = useState(meta.description || '');
+
+    // Sync description if meta changes
+    useEffect(() => {
+        if (meta.description !== undefined) {
+            setDescription(meta.description || '');
+        }
+    }, [meta.description]);
 
     // DnD Sensors
     const sensors = useSensors(
@@ -581,7 +632,13 @@ export default function BusinessEditor({ mode, initialDsl, onDslChange, schema, 
             return dsl;
         } else {
             // ACTION mode
-            let dsl = `ACTION ${meta.entityType || 'Entity'}.${meta.name || 'action'} {\n`;
+            const paramsStr = meta.parameters && meta.parameters.length > 0
+                ? `(${meta.parameters.map(p => `${p.name}: ${p.type}${p.optional ? '?' : ''}`).join(', ')})`
+                : '';
+            let dsl = `ACTION ${meta.entityType || 'Entity'}.${meta.name || 'action'}${paramsStr} {\n`;
+            if (description) {
+                dsl += `    DESCRIPTION: "${description.replace(/"/g, '\\"')}"\n\n`;
+            }
             preconditions.forEach(p => {
                 dsl += `    PRECONDITION ${p.label || 'check'}: ${p.conditions || 'true'}\n`;
                 if (p.onFailure) {

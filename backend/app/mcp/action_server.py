@@ -1,12 +1,12 @@
 from contextlib import asynccontextmanager
-from typing import AsyncIterator, Any, List
+from typing import Any, List
 from pathlib import Path
 import logging
 
 from fastmcp import FastMCP
-from neo4j import AsyncGraphDatabase
 
-from app.core.config import settings
+from app.core.database import async_session
+from app.services.pg_graph_storage import PGGraphStorage
 from app.services.agent_tools.action_tools import (
     ActionRegistry,
     ActionExecutor,
@@ -19,17 +19,6 @@ logger = logging.getLogger(__name__)
 
 # Initialize FastMCP server
 mcp = FastMCP("Action Server")
-
-# Initialize shared driver
-driver = AsyncGraphDatabase.driver(
-    settings.NEO4J_URI,
-    auth=(settings.NEO4J_USERNAME, settings.NEO4J_PASSWORD)
-)
-
-@asynccontextmanager
-async def get_session():
-    async with driver.session(database=settings.NEO4J_DATABASE) as session:
-        yield session
 
 # Initialize services
 action_registry = ActionRegistry()
@@ -44,28 +33,41 @@ if rules_dir.exists():
 else:
     logger.warning(f"Rules directory {rules_dir} not found")
 
-async def get_executor() -> ActionExecutor:
-     # We pass None for event_emitter for now as we don't have a global one here
-     # If needed, we can instantiate one, but it might need more setup
-     return ActionExecutor(registry=action_registry)
 
-async def _get_entity_data(tx, entity_type: str, entity_id: str) -> dict[str, Any] | None:
-    query = f"MATCH (n:`{entity_type}` {{name: $name}}) RETURN n"
-    result = await tx.run(query, name=entity_id)
-    record = await result.single()
-    if record:
-        node = record["n"]
-        return dict(node)
+async def get_executor() -> ActionExecutor:
+    # We pass None for event_emitter for now as we don't have a global one here
+    return ActionExecutor(registry=action_registry)
+
+
+async def _get_entity_data(
+    session, entity_type: str, entity_id: str
+) -> dict[str, Any] | None:
+    storage = PGGraphStorage(session)
+    entity = await storage.get_entity_by_name(entity_id, entity_type)
+    if entity:
+        return entity.get("properties", {})
     return None
+
 
 # Helper to format action def to dict for serialization
 def _format_action(action: ActionDef) -> dict[str, Any]:
     return {
-        "name": action.name,
+        "name": action.action_name,
         "description": action.description,
-        "parameters": action.parameters,
-        "preconditions": [p.dict() for p in action.preconditions] if action.preconditions else []
+        "parameters": [
+            {"name": p.name, "type": p.param_type, "optional": p.optional}
+            for p in action.parameters
+        ],
+        "preconditions": (
+            [
+                {"condition": p.condition, "on_failure": p.on_failure}
+                for p in action.preconditions
+            ]
+            if action.preconditions
+            else []
+        ),
     }
+
 
 @mcp.tool()
 async def list_available_actions(entity_type: str) -> list[dict[str, Any]]:
@@ -77,8 +79,11 @@ async def list_available_actions(entity_type: str) -> list[dict[str, Any]]:
     actions = action_registry.list_by_entity(entity_type)
     return [_format_action(a) for a in actions]
 
+
 @mcp.tool()
-async def get_action_details(entity_type: str, action_name: str) -> dict[str, Any] | None:
+async def get_action_details(
+    entity_type: str, action_name: str
+) -> dict[str, Any] | None:
     """Get details for a specific action.
 
     Args:
@@ -90,8 +95,11 @@ async def get_action_details(entity_type: str, action_name: str) -> dict[str, An
         return _format_action(action)
     return None
 
+
 @mcp.tool()
-async def validate_action_preconditions(entity_type: str, action_name: str, entity_id: str) -> dict[str, Any]:
+async def validate_action_preconditions(
+    entity_type: str, action_name: str, entity_id: str
+) -> dict[str, Any]:
     """Validate if an action can be executed on an entity.
 
     Args:
@@ -100,46 +108,50 @@ async def validate_action_preconditions(entity_type: str, action_name: str, enti
         entity_id: The ID of the entity instance
     """
     executor = await get_executor()
-    
-    async with get_session() as session:
+
+    async with async_session() as session:
         # Get entity data
-        entity_data = await session.execute_read(_get_entity_data, entity_type, entity_id)
+        entity_data = await _get_entity_data(session, entity_type, entity_id)
         if not entity_data:
-            return {"valid": False, "error": f"Entity {entity_type} {entity_id} not found"}
-            
+            return {
+                "valid": False,
+                "error": f"Entity {entity_type} {entity_id} not found",
+            }
+
         # Create context
         from app.rule_engine.context import EvaluationContext
+
         context = EvaluationContext(
-            entity=entity_data,
-            extras={},
-            session=session
+            entity={"id": entity_id, **entity_data}, session=session
         )
-        
-        # Check preconditions only (need to access executor internals or modify it)
-        # ActionExecutor.execute does everything. 
-        # We need a validate method on ActionExecutor or manually check.
-        # Since I can't easily modify ActionExecutor right now, I'll replicate the check logic here
-        
+
         action = action_registry.lookup(entity_type, action_name)
         if not action:
-             return {"valid": False, "error": f"Action not found"}
+            return {"valid": False, "error": f"Action not found"}
 
         from app.rule_engine.evaluator import ExpressionEvaluator
+
         evaluator = ExpressionEvaluator(context)
-        
+
         failures = []
         for precondition in action.preconditions:
             result = await evaluator.evaluate(precondition.condition)
             if not result:
                 failures.append(precondition.on_failure)
-                
+
         if failures:
             return {"valid": False, "errors": failures}
-            
+
         return {"valid": True}
 
+
 @mcp.tool()
-async def execute_action(entity_type: str, action_name: str, entity_id: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+async def execute_action(
+    entity_type: str,
+    action_name: str,
+    entity_id: str,
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Execute an action on an entity.
 
     Args:
@@ -149,30 +161,45 @@ async def execute_action(entity_type: str, action_name: str, entity_id: str, par
         params: Optional parameters for the action
     """
     executor = await get_executor()
-    
-    async with get_session() as session:
+
+    async with async_session() as session:
         # Get entity data
-        entity_data = await session.execute_read(_get_entity_data, entity_type, entity_id)
+        entity_data = await _get_entity_data(session, entity_type, entity_id)
         if not entity_data:
-            return {"success": False, "error": f"Entity {entity_type} {entity_id} not found"}
-            
+            return {
+                "success": False,
+                "error": f"Entity {entity_type} {entity_id} not found",
+            }
+
         # Create context
         from app.rule_engine.context import EvaluationContext
+
         context = EvaluationContext(
-            entity=entity_data,
-            extras=params or {},
-            session=session
+            entity={"id": entity_id, **entity_data},
+            variables=params or {},
+            session=session,
         )
-        
-        result = await executor.execute(entity_type, action_name, context)
-        return {
-            "success": result.success, 
-            "error": result.error, 
-            "changes": result.changes
-        }
+
+        try:
+            result = await executor.execute(entity_type, action_name, context)
+            await session.commit()
+            return {
+                "success": result.success,
+                "error": result.error,
+                "changes": result.changes,
+            }
+        except Exception as e:
+            await session.rollback()
+            return {"success": False, "error": str(e)}
+
 
 @mcp.tool()
-async def batch_execute_action(entity_type: str, action_name: str, entity_ids: List[str], params: dict[str, Any] | None = None) -> dict[str, Any]:
+async def batch_execute_action(
+    entity_type: str,
+    action_name: str,
+    entity_ids: List[str],
+    params: dict[str, Any] | None = None,
+) -> dict[str, Any]:
     """Execute an action on multiple entities.
 
     Args:
@@ -183,33 +210,39 @@ async def batch_execute_action(entity_type: str, action_name: str, entity_ids: L
     """
     executor = await get_executor()
     results = []
-    
-    # Simple serial execution
-    async with get_session() as session:
+
+    async with async_session() as session:
         for eid in entity_ids:
             try:
                 # Get entity data
-                entity_data = await session.execute_read(_get_entity_data, entity_type, eid)
+                entity_data = await _get_entity_data(session, entity_type, eid)
                 if not entity_data:
-                    results.append({"id": eid, "success": False, "error": "Entity not found"})
+                    results.append(
+                        {"id": eid, "success": False, "error": "Entity not found"}
+                    )
                     continue
 
                 # Create context
                 from app.rule_engine.context import EvaluationContext
+
                 context = EvaluationContext(
-                    entity=entity_data,
-                    extras=params or {},
-                    session=session
+                    entity={"id": eid, **entity_data},
+                    variables=params or {},
+                    session=session,
                 )
-                
+
                 res = await executor.execute(entity_type, action_name, context)
-                results.append({
-                    "id": eid, 
-                    "success": res.success, 
-                    "error": res.error,
-                    "changes": res.changes
-                })
+                results.append(
+                    {
+                        "id": eid,
+                        "success": res.success,
+                        "error": res.error,
+                        "changes": res.changes,
+                    }
+                )
             except Exception as e:
-                 results.append({"id": eid, "success": False, "error": str(e)})
-            
+                results.append({"id": eid, "success": False, "error": str(e)})
+
+        await session.commit()
+
     return {"summary": "Batch execution completed", "results": results}

@@ -9,10 +9,11 @@ services:
       - HOST=0.0.0.0
       - PORT=8000
       - SECRET_KEY=default-secret-key-change-me
-      - CORS_ORIGINS=["http://localhost:3000"]
+      - CORS_ORIGINS=["http://localhost:3000", "http://127.0.0.1:3000"]
       - DATABASE_URL=postgresql+asyncpg://postgres:postgres@db:5432/kg_agent
     depends_on:
-      - db
+      db:
+        condition: service_healthy
 
   frontend:
     build:
@@ -24,7 +25,8 @@ services:
       - BACKEND_URL=http://backend:8000
       - NEXT_PUBLIC_API_URL=http://localhost:3000/api
     depends_on:
-      - backend
+      backend:
+        condition: service_started
 
   db:
     image: postgres:18-alpine
@@ -35,6 +37,11 @@ services:
       - POSTGRES_DB=kg_agent
     ports:
       - "5432:5432"
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
     volumes:
       - postgres_data:/var/lib/postgresql/data
 

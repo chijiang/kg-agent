@@ -23,6 +23,7 @@ import {
     RuleDetail,
     ActionInfo,
     ActionDetail,
+    ActionParameter,
 } from '@/lib/api'
 import { toast } from 'sonner'
 import {
@@ -38,8 +39,9 @@ import {
     RefreshCw,
     Play,
     Settings,
+    Minus,
 } from 'lucide-react'
-import BusinessEditor, { Schema } from '@/components/business-editor'
+import BusinessEditor, { Schema, parseActionSignature } from '@/components/business-editor'
 import { graphApi } from '@/lib/api'
 
 // Rule card component
@@ -138,8 +140,13 @@ function ActionCard({
                                 {action.name}
                             </CardTitle>
                             <p className="text-xs text-slate-500 mt-0.5">
-                                实体类型: {action.entity_type}
+                                {action.entity_type}
                             </p>
+                            {action.description && (
+                                <p className="text-[10px] text-slate-400 mt-1 italic line-clamp-2">
+                                    {action.description}
+                                </p>
+                            )}
                         </div>
                     </div>
                     <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -574,8 +581,10 @@ function ActionEditorDialog({
     const [name, setName] = useState('')
     const [entityType, setEntityType] = useState('')
     const [isActive, setIsActive] = useState(true)
+    const [description, setDescription] = useState('')
     const [dslContent, setDslContent] = useState('')
     const [error, setError] = useState('')
+    const [parameters, setParameters] = useState<ActionParameter[]>([])
     const [saving, setSaving] = useState(false)
     const [activeTab, setActiveTab] = useState('dsl')
     const [schema, setSchema] = useState<Schema>({ nodes: [], relationships: [] })
@@ -584,13 +593,38 @@ function ActionEditorDialog({
     useEffect(() => {
         if (action) {
             setName(action.name)
-            setEntityType(action.entity_type)
-            setIsActive(action.is_active)
             setDslContent(action.dsl_content)
+            setDescription(action.description || '')
+
+            // Extract base name and parameters from signature if needed
+            // But ActionDef already has structured parameters if we fetch it from registry
+            // For now, let's parse the signature from the name or DSL
+            const match = action.name.match(/^([^.(]+)\.(.+)$/)
+            if (match) {
+                setEntityType(match[1])
+                const fullActionName = match[2]
+
+                // Check if fullActionName has parameters
+                const paramMatch = fullActionName.match(/^([^()]+)\((.*)\)$/)
+                if (paramMatch) {
+                    setName(paramMatch[1])
+                    // Parameters are usually in the action details if we use a different API, 
+                    // but here we can parse from DSL as the source of truth
+                } else {
+                    setName(fullActionName)
+                }
+            }
+
+            // Sync parameters from DSL
+            const sig = parseActionSignature(action.dsl_content)
+            if (sig) {
+                setParameters(sig.parameters)
+            }
         } else {
             setName('')
             setEntityType('')
             setIsActive(true)
+            setParameters([])
             setDslContent(`// 新动作示例
 ACTION Entity.submit {
     PRECONDITION statusCheck: this.status == "Draft"
@@ -619,6 +653,7 @@ ACTION Entity.submit {
         try {
             if (action) {
                 // Update existing action
+                const fullName = `${entityType.trim()}.${name.trim()}`
                 await actionsApi.update(action.name, {
                     dsl_content: dslContent,
                     is_active: isActive,
@@ -636,8 +671,9 @@ ACTION Entity.submit {
                     setSaving(false)
                     return
                 }
+                const fullName = `${entityType.trim()}.${name.trim()}`
                 await actionsApi.create({
-                    name: name.trim(),
+                    name: fullName,
                     entity_type: entityType.trim(),
                     dsl_content: dslContent,
                     is_active: isActive,
@@ -694,6 +730,96 @@ ACTION Entity.submit {
                                 className={action ? 'bg-slate-100' : ''}
                             />
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <label className="text-sm font-medium text-slate-700">
+                            动作描述
+                        </label>
+                        <Input
+                            value={description}
+                            onChange={(e) => setDescription(e.target.value)}
+                            placeholder="例如: 将采购订单状态更新为已提交"
+                        />
+                    </div>
+
+                    {/* Parameters Section */}
+                    <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
+                        <div className="flex items-center justify-between">
+                            <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
+                                <Layers className="h-4 w-4 text-indigo-500" />
+                                动作参数配置
+                            </label>
+                            <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => setParameters([...parameters, { name: '', type: 'string', optional: false }])}
+                                className="h-7 text-xs"
+                            >
+                                <Plus className="h-3 w-3 mr-1" /> 添加参数
+                            </Button>
+                        </div>
+
+                        {parameters.length === 0 ? (
+                            <p className="text-xs text-slate-400 italic">暂无参数，点击“添加参数”开始配置。</p>
+                        ) : (
+                            <div className="space-y-2">
+                                {parameters.map((param, index) => (
+                                    <div key={index} className="flex items-center gap-2 bg-white p-2 rounded border border-slate-100 shadow-sm">
+                                        <div className="flex-1">
+                                            <Input
+                                                value={param.name}
+                                                onChange={(e) => {
+                                                    const newParams = [...parameters]
+                                                    newParams[index].name = e.target.value
+                                                    setParameters(newParams)
+                                                }}
+                                                placeholder="参数名"
+                                                className="h-8 text-xs font-mono"
+                                            />
+                                        </div>
+                                        <div className="w-32">
+                                            <select
+                                                value={param.type}
+                                                onChange={(e) => {
+                                                    const newParams = [...parameters]
+                                                    newParams[index].type = e.target.value
+                                                    setParameters(newParams)
+                                                }}
+                                                className="w-full h-8 text-xs rounded border border-slate-200 bg-transparent px-2"
+                                            >
+                                                <option value="string">string</option>
+                                                <option value="number">number</option>
+                                                <option value="boolean">boolean</option>
+                                                <option value="datetime">datetime</option>
+                                                <option value="any">any</option>
+                                            </select>
+                                        </div>
+                                        <div className="flex items-center gap-1 min-w-[60px]">
+                                            <input
+                                                type="checkbox"
+                                                checked={param.optional}
+                                                onChange={(e) => {
+                                                    const newParams = [...parameters]
+                                                    newParams[index].optional = e.target.checked
+                                                    setParameters(newParams)
+                                                }}
+                                                className="h-3 w-3 rounded border-slate-300 text-emerald-600"
+                                            />
+                                            <label className="text-[10px] text-slate-500">可选</label>
+                                        </div>
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            onClick={() => setParameters(parameters.filter((_, i) => i !== index))}
+                                            className="h-8 w-8 text-slate-400 hover:text-red-500 hover:bg-red-50"
+                                        >
+                                            <Minus className="h-4 w-4" />
+                                        </Button>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
                     </div>
 
                     <div className="flex items-center gap-2">
@@ -772,7 +898,7 @@ ACTION Entity.submit {
                                     mode="ACTION"
                                     initialDsl={dslContent}
                                     schema={schema}
-                                    meta={{ name, entityType }}
+                                    meta={{ name, entityType, description, parameters }}
                                     onDslChange={setDslContent}
                                 />
                             </div>

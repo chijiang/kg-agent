@@ -1,7 +1,7 @@
 # backend/app/api/graph.py
 """Graph API endpoints using PostgreSQL storage.
 
-Replaces the original Neo4j-based implementation with PostgreSQL.
+Implementation with PostgreSQL.
 """
 
 from fastapi import APIRouter, Depends, File, UploadFile, HTTPException, Request
@@ -37,9 +37,7 @@ async def import_graph(
 
     importer = PGGraphImporter(db)
     schema_stats = await importer.import_schema(parser)
-    instance_stats = await importer.import_instances(
-        schema_triples, instance_triples
-    )
+    instance_stats = await importer.import_instances(schema_triples, instance_triples)
 
     return {
         "message": "Graph imported successfully",
@@ -50,7 +48,7 @@ async def import_graph(
             "schema_properties": schema_stats.get("properties", 0),
             "nodes": instance_stats.get("nodes", 0),
             "relationships": instance_stats.get("relationships", 0),
-        }
+        },
     }
 
 
@@ -81,16 +79,15 @@ async def get_node(
 
     # 如果没找到，尝试按 URI 查找
     from app.models.graph import GraphEntity
-    result = await db.execute(
-        select(GraphEntity).where(GraphEntity.uri == uri)
-    )
+
+    result = await db.execute(select(GraphEntity).where(GraphEntity.uri == uri))
     entity = result.scalar_one_or_none()
     if entity:
         return {
             "id": entity.id,
             "name": entity.name,
             "entity_type": entity.entity_type,
-            "properties": entity.properties or {}
+            "properties": entity.properties or {},
         }
 
     raise HTTPException(status_code=404, detail="Node not found")

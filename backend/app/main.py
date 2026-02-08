@@ -39,7 +39,6 @@ async def startup():
     rule_registry = RuleRegistry()
 
     # Create RuleEngine with database session provider
-    # Neo4j has been replaced with PostgreSQL
     rule_engine = RuleEngine(
         action_registry,
         rule_registry,

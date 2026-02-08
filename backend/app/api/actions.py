@@ -92,6 +92,7 @@ class ActionInfo(BaseModel):
     parameters: list[dict[str, Any]]
     precondition_count: int
     has_effect: bool
+    description: str | None = None
 
 
 class ActionDefinitionResponse(BaseModel):
@@ -132,7 +133,7 @@ async def execute_action(
     # Build entity dict with id and data
     entity = {"id": request.entity_id, **request.entity_data}
 
-    # Get database session from app state (no Neo4j needed)
+    # Get database session from app state
     session = None
 
     try:
@@ -170,9 +171,7 @@ async def execute_action(
 
         # Apply updates via PGGraphStorage to trigger rules
         storage = PGGraphStorage(db, event_emitter=event_emitter)
-        await storage.update_entity(
-            entity_type, request.entity_id, result.changes
-        )
+        await storage.update_entity(entity_type, request.entity_id, result.changes)
 
     return {
         "success": True,
@@ -227,6 +226,7 @@ async def upload_action(
             entity_type=request.entity_type,
             dsl_content=request.dsl_content,
             is_active=request.is_active,
+            description=action_defs[0].description if action_defs else None,
         )
 
         # Load and register in memory
@@ -275,7 +275,6 @@ async def list_actions(
     """
     actions = registry.list_all()
 
-    action_infos = []
     for action in actions:
         action_infos.append(
             ActionInfo(
@@ -283,10 +282,14 @@ async def list_actions(
                 action_name=action.action_name,
                 parameters=[
                     {"name": p.name, "type": p.param_type, "optional": p.optional}
-                    for p in (action.parameters or []) if p is not None
+                    for p in (action.parameters or [])
+                    if p is not None
                 ],
                 precondition_count=len(action.preconditions or []),
                 has_effect=action.effect is not None,
+                description=(
+                    action.description if hasattr(action, "description") else None
+                ),
             )
         )
 
@@ -319,6 +322,7 @@ async def list_action_definitions(
                 "is_active": action.is_active,
                 "created_at": action.created_at.isoformat(),
                 "updated_at": action.updated_at.isoformat(),
+                "description": action.description,
             }
             for action in actions
         ],
@@ -357,6 +361,7 @@ async def get_action_definition(
         "entity_type": action.entity_type,
         "dsl_content": action.dsl_content,
         "is_active": action.is_active,
+        "description": action.description,
         "created_at": action.created_at.isoformat(),
         "updated_at": action.updated_at.isoformat(),
     }
@@ -412,7 +417,10 @@ async def update_action_definition(
 
         # Update in database
         action = await repo.update(
-            name=name, dsl_content=request.dsl_content, is_active=request.is_active
+            name=name,
+            dsl_content=request.dsl_content,
+            is_active=request.is_active,
+            description=action_defs[0].description if action_defs else None,
         )
 
         # Re-register in the in-memory registry
@@ -496,10 +504,12 @@ async def list_entity_actions(
                 action_name=action.action_name,
                 parameters=[
                     {"name": p.name, "type": p.param_type, "optional": p.optional}
-                    for p in (action.parameters or []) if p is not None
+                    for p in (action.parameters or [])
+                    if p is not None
                 ],
                 precondition_count=len(action.preconditions or []),
                 has_effect=action.effect is not None,
+                description=action.description,
             )
         )
 

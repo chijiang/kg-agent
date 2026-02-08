@@ -3,14 +3,18 @@
 PostgreSQL 图导入器
 
 将 OWL/TTL 解析结果导入 PostgreSQL 图存储。
-替代原有的 Neo4j GraphImporter。
 """
 
 import logging
 from typing import List, Set, Dict, Any
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from app.models.graph import GraphEntity, GraphRelationship, SchemaClass, SchemaRelationship
+from app.models.graph import (
+    GraphEntity,
+    GraphRelationship,
+    SchemaClass,
+    SchemaRelationship,
+)
 from app.services.owl_parser import OWLParser, Triple
 
 logger = logging.getLogger(__name__)
@@ -70,9 +74,7 @@ class PGGraphImporter:
                     existing.data_properties = []
                 else:
                     new_class = SchemaClass(
-                        name=cls["name"],
-                        label=cls.get("label"),
-                        data_properties=[]
+                        name=cls["name"], label=cls.get("label"), data_properties=[]
                     )
                     self.db.add(new_class)
                 stats["classes"] += 1
@@ -104,14 +106,14 @@ class PGGraphImporter:
                         select(SchemaRelationship).where(
                             SchemaRelationship.source_class_id == domain_id,
                             SchemaRelationship.target_class_id == range_id,
-                            SchemaRelationship.relationship_type == rel_type
+                            SchemaRelationship.relationship_type == rel_type,
                         )
                     )
                     if not existing.scalar_one_or_none():
                         schema_rel = SchemaRelationship(
                             source_class_id=domain_id,
                             target_class_id=range_id,
-                            relationship_type=rel_type
+                            relationship_type=rel_type,
                         )
                         self.db.add(schema_rel)
                         stats["properties"] += 1
@@ -135,7 +137,9 @@ class PGGraphImporter:
                     if schema_class.data_properties is None:
                         schema_class.data_properties = []
                     if prop_info not in (schema_class.data_properties or []):
-                        schema_class.data_properties = (schema_class.data_properties or []) + [prop_info]
+                        schema_class.data_properties = (
+                            schema_class.data_properties or []
+                        ) + [prop_info]
                         stats["properties"] += 1
 
         await self.db.commit()
@@ -164,24 +168,28 @@ class PGGraphImporter:
 
         # 收集数据
         type_map: Dict[str, str] = {}  # {instance_uri: class_name}
-        node_properties: Dict[str, Dict[str, Any]] = {}  # {instance_name: {prop: value}}
+        node_properties: Dict[str, Dict[str, Any]] = (
+            {}
+        )  # {instance_name: {prop: value}}
         relationships: List[Dict[str, str]] = []  # [{subject, predicate, object}]
 
         for triple in instance_triples:
             pred = triple.predicate
 
             # 类型声明 (rdf:type)
-            if pred.endswith("type") or pred.endswith("#type") or "type" in pred.split("/")[-1]:
+            if (
+                pred.endswith("type")
+                or pred.endswith("#type")
+                or "type" in pred.split("/")[-1]
+            ):
                 class_name = triple.obj.split("#")[-1].split("/")[-1]
                 type_map[triple.subject] = class_name
 
             # ObjectProperty -> 关系
             elif pred in self.object_property_uris:
-                relationships.append({
-                    "subject": triple.subject,
-                    "predicate": pred,
-                    "object": triple.obj
-                })
+                relationships.append(
+                    {"subject": triple.subject, "predicate": pred, "object": triple.obj}
+                )
 
             # DatatypeProperty -> 节点属性
             elif pred in self.data_property_uris:
@@ -195,11 +203,13 @@ class PGGraphImporter:
             else:
                 # 如果目标看起来是 URI（包含 # 或 /），则当作关系
                 if "#" in triple.obj or "/" in triple.obj:
-                    relationships.append({
-                        "subject": triple.subject,
-                        "predicate": pred,
-                        "object": triple.obj
-                    })
+                    relationships.append(
+                        {
+                            "subject": triple.subject,
+                            "predicate": pred,
+                            "object": triple.obj,
+                        }
+                    )
                 else:
                     # 否则当作属性
                     subject_name = triple.subject.split("#")[-1].split("/")[-1]
@@ -216,11 +226,9 @@ class PGGraphImporter:
 
             if class_name not in nodes_by_class:
                 nodes_by_class[class_name] = []
-            nodes_by_class[class_name].append({
-                "name": node_name,
-                "props": props,
-                "uri": subject_uri
-            })
+            nodes_by_class[class_name].append(
+                {"name": node_name, "props": props, "uri": subject_uri}
+            )
             stats["properties"] += len(props)
 
         # 批量创建节点
@@ -230,7 +238,7 @@ class PGGraphImporter:
                 existing = await self.db.execute(
                     select(GraphEntity).where(
                         GraphEntity.name == node["name"],
-                        GraphEntity.entity_type == class_name
+                        GraphEntity.entity_type == class_name,
                     )
                 )
                 if not existing.scalar_one_or_none():
@@ -239,7 +247,7 @@ class PGGraphImporter:
                         entity_type=class_name,
                         is_instance=True,
                         properties=node["props"],
-                        uri=node.get("uri")
+                        uri=node.get("uri"),
                     )
                     self.db.add(new_entity)
                     stats["nodes"] += 1
@@ -264,14 +272,14 @@ class PGGraphImporter:
                     select(GraphRelationship).where(
                         GraphRelationship.source_id == source_id,
                         GraphRelationship.target_id == target_id,
-                        GraphRelationship.relationship_type == rel_name
+                        GraphRelationship.relationship_type == rel_name,
                     )
                 )
                 if not existing.scalar_one_or_none():
                     new_rel = GraphRelationship(
                         source_id=source_id,
                         target_id=target_id,
-                        relationship_type=rel_name
+                        relationship_type=rel_name,
                     )
                     self.db.add(new_rel)
                     stats["relationships"] += 1
@@ -282,14 +290,18 @@ class PGGraphImporter:
     async def _build_entity_cache(self):
         """构建实体名称到 ID 的缓存"""
         result = await self.db.execute(
-            select(GraphEntity.id, GraphEntity.name)
-            .where(GraphEntity.is_instance == True)
+            select(GraphEntity.id, GraphEntity.name).where(
+                GraphEntity.is_instance == True
+            )
         )
         for row in result.all():
             self._entity_cache[row[1]] = row[0]
 
     async def import_all(
-        self, parser: OWLParser, schema_triples: List[Triple], instance_triples: List[Triple]
+        self,
+        parser: OWLParser,
+        schema_triples: List[Triple],
+        instance_triples: List[Triple],
     ) -> Dict:
         """导入所有数据（Schema + Instance）
 
@@ -313,7 +325,7 @@ class PGGraphImporter:
                 "nodes": instance_stats.get("nodes", 0),
                 "relationships": instance_stats.get("relationships", 0),
                 "instance_properties": instance_stats.get("properties", 0),
-            }
+            },
         }
 
     async def clear_all_data(self):

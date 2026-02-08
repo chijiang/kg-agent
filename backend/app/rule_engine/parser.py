@@ -121,11 +121,16 @@ class ASTTransformer(Transformer):
 
         # Find where preconditions end and effect begins
         # Preconditions are Precondition objects, effect is None or an EffectBlock
+        # description is a string if present
+        description = None
         preconditions = []
         effect = None
 
         for item in items[1:]:
-            if isinstance(item, Precondition):
+            if isinstance(item, str) and not isinstance(item, Precondition):
+                # This is the description string from the description rule
+                description = item
+            elif isinstance(item, Precondition):
                 preconditions.append(item)
             elif isinstance(item, EffectBlock) or item is None:
                 effect = item
@@ -135,6 +140,7 @@ class ASTTransformer(Transformer):
             effect is None
             and len(items) > 1
             and not isinstance(items[-1], Precondition)
+            and not isinstance(items[-1], str)
         ):
             effect = items[-1]
 
@@ -145,7 +151,13 @@ class ASTTransformer(Transformer):
             parameters=parameters,
             preconditions=preconditions,
             effect=effect,
+            description=description,
         )
+
+    def description(self, items):
+        # items: [STRING]
+        # Strip the quotes from the STRING terminal
+        return str(items[0]).strip('"')
 
     def entity_action(self, items):
         # items: [CNAME, CNAME] or [CNAME, CNAME, param_list]

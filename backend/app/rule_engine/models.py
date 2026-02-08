@@ -41,6 +41,7 @@ class ActionDef:
     parameters: list[Parameter]
     preconditions: list[Precondition]
     effect: Any | None  # AST EffectBlock node
+    description: str | None = None
 
 
 @dataclass
@@ -92,5 +93,6 @@ class ActionResult:
 @dataclass
 class GraphViewEvent:
     """Event triggered when graph data is viewed/retrieved."""
+
     nodes: list[dict[str, Any]] = field(default_factory=list)
     edges: list[dict[str, Any]] = field(default_factory=list)

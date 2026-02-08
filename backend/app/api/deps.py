@@ -12,10 +12,14 @@ security = HTTPBearer()
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
-    db: AsyncSession = Depends(get_db)
+    db: AsyncSession = Depends(get_db),
 ) -> User:
     token = credentials.credentials
-    payload = verify_access_token(token)
+    try:
+        payload = verify_access_token(token)
+    except ValueError as e:
+        raise HTTPException(status_code=401, detail=str(e))
+
     username = payload.get("sub")
 
     if not username:

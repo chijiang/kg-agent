@@ -26,7 +26,8 @@ class ActionDefinitionRepository:
         name: str,
         entity_type: str,
         dsl_content: str,
-        is_active: bool = True
+        is_active: bool = True,
+        description: Optional[str] = None,
     ) -> ActionDefinition:
         """Create a new action definition.
 
@@ -35,6 +36,7 @@ class ActionDefinitionRepository:
             entity_type: Entity type (e.g., "PurchaseOrder")
             dsl_content: Full ACTION DSL content
             is_active: Whether the action is active
+            description: Optional action description
 
         Returns:
             Created ActionDefinition instance
@@ -43,7 +45,8 @@ class ActionDefinitionRepository:
             name=name,
             entity_type=entity_type,
             dsl_content=dsl_content,
-            is_active=is_active
+            is_active=is_active,
+            description=description,
         )
         self.session.add(action)
         await self.session.commit()
@@ -101,7 +104,7 @@ class ActionDefinitionRepository:
         result = await self.session.execute(
             select(ActionDefinition).where(
                 ActionDefinition.entity_type == entity_type,
-                ActionDefinition.is_active == True
+                ActionDefinition.is_active == True,
             )
         )
         return list(result.scalars().all())
@@ -119,7 +122,8 @@ class ActionDefinitionRepository:
         self,
         name: str,
         dsl_content: Optional[str] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
+        description: Optional[str] = None,
     ) -> Optional[ActionDefinition]:
         """Update an action definition.
 
@@ -127,6 +131,7 @@ class ActionDefinitionRepository:
             name: Action name to update
             dsl_content: New DSL content (optional)
             is_active: New active status (optional)
+            description: New description (optional)
 
         Returns:
             Updated ActionDefinition or None if not found
@@ -139,6 +144,8 @@ class ActionDefinitionRepository:
             action.dsl_content = dsl_content
         if is_active is not None:
             action.is_active = is_active
+        if description is not None:
+            action.description = description
 
         await self.session.commit()
         await self.session.refresh(action)
@@ -195,7 +202,7 @@ class RuleRepository:
         trigger_entity: str,
         trigger_property: Optional[str] = None,
         priority: int = 0,
-        is_active: bool = True
+        is_active: bool = True,
     ) -> Rule:
         """Create a new rule.
 
@@ -218,7 +225,7 @@ class RuleRepository:
             trigger_entity=trigger_entity,
             trigger_property=trigger_property,
             priority=priority,
-            is_active=is_active
+            is_active=is_active,
         )
         self.session.add(rule)
         await self.session.commit()
@@ -234,9 +241,7 @@ class RuleRepository:
         Returns:
             Rule instance or None
         """
-        result = await self.session.execute(
-            select(Rule).where(Rule.id == rule_id)
-        )
+        result = await self.session.execute(select(Rule).where(Rule.id == rule_id))
         return result.scalar_one_or_none()
 
     async def get_by_name(self, name: str) -> Optional[Rule]:
@@ -248,9 +253,7 @@ class RuleRepository:
         Returns:
             Rule instance or None
         """
-        result = await self.session.execute(
-            select(Rule).where(Rule.name == name)
-        )
+        result = await self.session.execute(select(Rule).where(Rule.name == name))
         return result.scalar_one_or_none()
 
     async def list_active(self) -> List[Rule]:
@@ -260,9 +263,7 @@ class RuleRepository:
             List of active Rule instances
         """
         result = await self.session.execute(
-            select(Rule)
-            .where(Rule.is_active == True)
-            .order_by(Rule.priority.desc())
+            select(Rule).where(Rule.is_active == True).order_by(Rule.priority.desc())
         )
         return list(result.scalars().all())
 
@@ -272,9 +273,7 @@ class RuleRepository:
         Returns:
             List of all Rule instances
         """
-        result = await self.session.execute(
-            select(Rule).order_by(Rule.priority.desc())
-        )
+        result = await self.session.execute(select(Rule).order_by(Rule.priority.desc()))
         return list(result.scalars().all())
 
     async def update(
@@ -285,7 +284,7 @@ class RuleRepository:
         trigger_entity: Optional[str] = None,
         trigger_property: Optional[str] = None,
         priority: Optional[int] = None,
-        is_active: Optional[bool] = None
+        is_active: Optional[bool] = None,
     ) -> Optional[Rule]:
         """Update a rule.
 

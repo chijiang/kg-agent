@@ -18,6 +18,9 @@ COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 # Disable Next.js telemetry during build
 ENV NEXT_TELEMETRY_DISABLED 1
+# Set BACKEND_URL at build time for rewrites
+ARG BACKEND_URL=http://backend:8000
+ENV BACKEND_URL=$BACKEND_URL
 RUN pnpm build
 
 # Final runner stage
@@ -31,6 +34,7 @@ COPY --from=builder /app/public ./public
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
+COPY --from=builder /app/next.config.ts ./next.config.ts
 
 EXPOSE 3000
 
