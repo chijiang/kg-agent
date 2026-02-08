@@ -92,9 +92,11 @@ class PGGraphStorage:
     # ==================== 基础操作 ====================
 
     async def clear_graph(self):
-        """清除全部图谱数据"""
+        """清除全部图谱数据，包括实例和本体"""
         await self.db.execute(delete(GraphRelationship))
         await self.db.execute(delete(GraphEntity))
+        await self.db.execute(delete(SchemaRelationship))
+        await self.db.execute(delete(SchemaClass))
         await self.db.commit()
 
     async def update_entity(
@@ -147,6 +149,7 @@ class PGGraphStorage:
                 "name": c.name,
                 "label": c.label,
                 "dataProperties": c.data_properties or [],
+                "color": c.color,
             }
             for c in classes
         ]
@@ -227,6 +230,154 @@ class PGGraphStorage:
                 )
 
         return {"class": class_data, "relationships": relationships_data}
+
+    async def add_ontology_class(
+        self,
+        name: str,
+        label: Optional[str] = None,
+        data_properties: List[str] = None,
+        color: Optional[str] = None,
+    ) -> Dict:
+        """添加本体类定义"""
+        # 检查是否已存在
+        result = await self.db.execute(
+            select(SchemaClass).where(SchemaClass.name == name)
+        )
+        if result.scalar_one_or_none():
+            return {"error": f"Class '{name}' already exists"}
+
+        new_class = SchemaClass(
+            name=name,
+            label=label or name,
+            data_properties=data_properties or [],
+            color=color,
+        )
+        self.db.add(new_class)
+        await self.db.commit()
+        return {
+            "name": name,
+            "label": label,
+            "data_properties": data_properties or [],
+            "color": color,
+        }
+
+    async def update_ontology_class(
+        self,
+        name: str,
+        label: Optional[str] = None,
+        data_properties: List[str] = None,
+        color: Optional[str] = None,
+    ) -> Dict:
+        """更新本体类定义"""
+        result = await self.db.execute(
+            select(SchemaClass).where(SchemaClass.name == name)
+        )
+        cls = result.scalar_one_or_none()
+        if not cls:
+            return {"error": f"Class '{name}' not found"}
+
+        if label is not None:
+            cls.label = label
+        if data_properties is not None:
+            cls.data_properties = data_properties
+        if color is not None:
+            cls.color = color
+
+        await self.db.commit()
+        return {
+            "name": name,
+            "label": cls.label,
+            "data_properties": cls.data_properties,
+            "color": cls.color,
+        }
+
+    async def delete_ontology_class(self, name: str) -> Dict:
+        """删除本体类定义"""
+        result = await self.db.execute(
+            select(SchemaClass).where(SchemaClass.name == name)
+        )
+        cls = result.scalar_one_or_none()
+        if not cls:
+            return {"error": f"Class '{name}' not found"}
+
+        # 删除相关的关系定义
+        await self.db.execute(
+            delete(SchemaRelationship).where(
+                or_(
+                    SchemaRelationship.source_class_id == cls.id,
+                    SchemaRelationship.target_class_id == cls.id,
+                )
+            )
+        )
+
+        await self.db.delete(cls)
+        await self.db.commit()
+        return {"message": f"Class '{name}' and its relationships deleted"}
+
+    async def add_ontology_relationship(
+        self, source: str, relationship_type: str, target: str
+    ) -> Dict:
+        """添加本体关系定义"""
+        # 获取 IDs
+        source_res = await self.db.execute(
+            select(SchemaClass.id).where(SchemaClass.name == source)
+        )
+        source_id = source_res.scalar_one_or_none()
+
+        target_res = await self.db.execute(
+            select(SchemaClass.id).where(SchemaClass.name == target)
+        )
+        target_id = target_res.scalar_one_or_none()
+
+        if not source_id or not target_id:
+            return {"error": "Source or target class not found"}
+
+        # 检查是否已存在
+        existing = await self.db.execute(
+            select(SchemaRelationship).where(
+                SchemaRelationship.source_class_id == source_id,
+                SchemaRelationship.target_class_id == target_id,
+                SchemaRelationship.relationship_type == relationship_type,
+            )
+        )
+        if existing.scalar_one_or_none():
+            return {"error": "Relationship definition already exists"}
+
+        new_rel = SchemaRelationship(
+            source_class_id=source_id,
+            target_class_id=target_id,
+            relationship_type=relationship_type,
+        )
+        self.db.add(new_rel)
+        await self.db.commit()
+        return {"source": source, "type": relationship_type, "target": target}
+
+    async def delete_ontology_relationship(
+        self, source: str, relationship_type: str, target: str
+    ) -> Dict:
+        """删除本体关系定义"""
+        source_res = await self.db.execute(
+            select(SchemaClass.id).where(SchemaClass.name == source)
+        )
+        source_id = source_res.scalar_one_or_none()
+
+        target_res = await self.db.execute(
+            select(SchemaClass.id).where(SchemaClass.name == target)
+        )
+        target_id = target_res.scalar_one_or_none()
+
+        if source_id and target_id:
+            result = await self.db.execute(
+                delete(SchemaRelationship).where(
+                    SchemaRelationship.source_class_id == source_id,
+                    SchemaRelationship.target_class_id == target_id,
+                    SchemaRelationship.relationship_type == relationship_type,
+                )
+            )
+            await self.db.commit()
+            return {"message": "Relationship definition deleted"}
+
+        return {"error": "Source or target class not found"}
 
     # ==================== Instance 查询 ====================
 

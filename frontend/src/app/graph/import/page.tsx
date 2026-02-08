@@ -55,7 +55,7 @@ export default function ImportPage() {
   }
 
   const handleClear = async () => {
-    if (!confirm('确定要清空当前图谱吗？此操作不可恢复。')) {
+    if (!confirm('确定要清空当前图谱吗？这将同时删除所有实例数据和本体定义（Ontology），此操作不可恢复。')) {
       return
     }
 

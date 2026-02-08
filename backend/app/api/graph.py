@@ -14,7 +14,7 @@ from app.models.user import User
 from app.services.pg_graph_storage import PGGraphStorage
 from app.services.pg_graph_importer import PGGraphImporter
 from app.rule_engine.event_emitter import GraphEventEmitter
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 
 router = APIRouter(prefix="/graph", tags=["graph"])
 
@@ -241,4 +241,105 @@ async def describe_class(
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
 
+    return result
+
+
+@router.get("/export/ontology")
+async def export_ontology(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """导出本体为 OWL/Turtle 文件"""
+    storage = PGGraphStorage(db)
+    classes = await storage.get_ontology_classes()
+    relationships = await storage.get_ontology_relationships()
+
+    from app.services.ontology_exporter import OntologyExporter
+
+    exporter = OntologyExporter()
+    ttl_content = exporter.export_to_ttl(classes, relationships)
+
+    return Response(
+        content=ttl_content,
+        media_type="text/turtle",
+        headers={"Content-Disposition": "attachment; filename=ontology.ttl"},
+    )
+
+
+@router.post("/ontology/classes")
+async def add_ontology_class(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加本体类"""
+    storage = PGGraphStorage(db)
+    result = await storage.add_ontology_class(
+        data["name"], data.get("label"), data.get("data_properties"), data.get("color")
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.put("/ontology/classes/{name}")
+async def update_ontology_class(
+    name: str,
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """更新本体类"""
+    storage = PGGraphStorage(db)
+    result = await storage.update_ontology_class(
+        name, data.get("label"), data.get("data_properties"), data.get("color")
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.delete("/ontology/classes/{name}")
+async def delete_ontology_class(
+    name: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除本体类"""
+    storage = PGGraphStorage(db)
+    result = await storage.delete_ontology_class(name)
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.post("/ontology/relationships")
+async def add_ontology_relationship(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """添加本体关系"""
+    storage = PGGraphStorage(db)
+    result = await storage.add_ontology_relationship(
+        data["source"], data["type"], data["target"]
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.api_route("/ontology/relationships", methods=["DELETE"])
+async def delete_ontology_relationship(
+    data: dict,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """删除本体关系"""
+    storage = PGGraphStorage(db)
+    result = await storage.delete_ontology_relationship(
+        data["source"], data["type"], data["target"]
+    )
+    if "error" in result:
+        raise HTTPException(status_code=400, detail=result["error"])
     return result

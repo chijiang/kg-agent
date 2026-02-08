@@ -1,20 +1,24 @@
 'use client'
 
-import { useEffect, useRef, useState, useCallback } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import cytoscape, { Core } from 'cytoscape'
 import { graphApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
+import { Crosshair } from 'lucide-react'
+import { Button } from '@/components/ui/button'
 
-// Schema 节点颜色（蓝色系，与 Instance 区分）
+// Professional color palette (muted, harmonious)
 const SCHEMA_COLORS = [
-    '#4A90D9', '#5B9BD5', '#6BA3E0', '#7CADE5', '#8DB7EA',
-    '#9EC1EF', '#AFCBF4', '#C0D5F9', '#3B82D9', '#2B72C9',
+    '#6366f1', '#8b5cf6', '#a855f7', '#d946ef', '#ec4899',
+    '#f43f5e', '#f97316', '#eab308', '#84cc16', '#22c55e',
+    '#14b8a6', '#06b6d4', '#0ea5e9', '#3b82f6', '#6366f1',
 ]
 
 interface SchemaNode {
     name: string
     label?: string
     dataProperties?: string[]
+    color?: string
 }
 
 interface SchemaRelationship {
@@ -30,15 +34,35 @@ interface SchemaData {
 
 interface SchemaViewerProps {
     onNodeSelect?: (node: SchemaNode | null) => void
+    onEdgeSelect?: (edge: { source: string; target: string; relationship_type: string } | null) => void
+    isEditMode?: boolean
+    activeStep?: 'IDLE' | 'SOURCE' | 'TARGET' | 'TYPE'
+    sourceNode?: string | null
+    onSchemaChange?: () => void
 }
 
-export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
+export function SchemaViewer({
+    onNodeSelect,
+    onEdgeSelect,
+    isEditMode,
+    activeStep = 'IDLE',
+    sourceNode,
+    onSchemaChange
+}: SchemaViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const cyRef = useRef<Core | null>(null)
     const token = useAuthStore((state) => state.token)
     const [selectedNode, setSelectedNode] = useState<any>(null)
     const [legend, setLegend] = useState<{ name: string; color: string }[]>([])
     const [isMounted, setIsMounted] = useState(false)
+
+    const onNodeSelectRef = useRef(onNodeSelect)
+    const onEdgeSelectRef = useRef(onEdgeSelect)
+
+    useEffect(() => {
+        onNodeSelectRef.current = onNodeSelect
+        onEdgeSelectRef.current = onEdgeSelect
+    }, [onNodeSelect, onEdgeSelect])
 
     useEffect(() => {
         setIsMounted(true)
@@ -56,19 +80,25 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
                     style: {
                         'label': 'data(label)',
                         'background-color': 'data(color)',
-                        'color': '#fff',
+                        'color': '#1e293b',
                         'text-valign': 'center',
                         'text-halign': 'center',
-                        'font-size': 11,
-                        'font-weight': 600,
-                        'width': 80,
-                        'height': 80,
+                        'font-size': 10,
+                        'font-weight': 500,
+                        'width': 56,
+                        'height': 56,
                         'text-wrap': 'ellipsis',
-                        'text-max-width': '70px',
-                        'border-width': 3,
+                        'text-max-width': '50px',
+                        'border-width': 2,
                         'border-color': 'data(borderColor)',
-                        'text-outline-color': 'data(color)',
-                        'text-outline-width': 2,
+                    },
+                },
+                {
+                    selector: '.selected-source',
+                    style: {
+                        'border-width': 3,
+                        'border-color': '#22c55e',
+                        'background-color': '#bbf7d0',
                     }
                 },
                 {
@@ -77,21 +107,21 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
                         'label': 'data(label)',
                         'curve-style': 'bezier',
                         'target-arrow-shape': 'triangle',
-                        'target-arrow-color': '#666',
-                        'line-color': '#888',
-                        'width': 2,
-                        'font-size': 10,
-                        'text-background-color': '#fff',
+                        'target-arrow-color': '#94a3b8',
+                        'line-color': '#cbd5e1',
+                        'width': 1.5,
+                        'font-size': 9,
+                        'text-background-color': '#f8fafc',
                         'text-background-opacity': 1,
-                        'text-background-padding': '3px',
-                        'color': '#444',
+                        'text-background-padding': '2px',
+                        'color': '#64748b',
                     }
                 },
                 {
                     selector: 'node:selected',
                     style: {
-                        'border-color': '#FFD700',
-                        'border-width': 4,
+                        'border-color': '#3b82f6',
+                        'border-width': 3,
                     }
                 }
             ],
@@ -103,18 +133,30 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
         cyRef.current.on('tap', 'node', (evt) => {
             const node = evt.target
             const nodeData = {
-                name: node.data('label'),
+                name: node.id(),
                 label: node.data('label'),
                 dataProperties: node.data('dataProperties'),
+                color: node.data('color'),
             }
             setSelectedNode(nodeData)
-            onNodeSelect?.(nodeData)
+            onNodeSelectRef.current?.(nodeData)
+        })
+
+        cyRef.current.on('tap', 'edge', (evt) => {
+            const edge = evt.target
+            const edgeData = {
+                source: edge.source().id(),
+                target: edge.target().id(),
+                relationship_type: edge.data('label'),
+            }
+            onEdgeSelectRef.current?.(edgeData)
         })
 
         cyRef.current.on('tap', (evt) => {
             if (evt.target === cyRef.current) {
                 setSelectedNode(null)
-                onNodeSelect?.(null)
+                onNodeSelectRef.current?.(null)
+                onEdgeSelectRef.current?.(null)
             }
         })
 
@@ -128,7 +170,7 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
         if (token && cyRef.current && isMounted) {
             loadSchema()
         }
-    }, [token, isMounted])
+    }, [token, isMounted, isEditMode, activeStep, sourceNode])
 
     const loadSchema = async () => {
         if (!cyRef.current || !isMounted) return
@@ -137,19 +179,16 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
             const res = await graphApi.getSchema(token!)
             const data: SchemaData = res.data
 
-            // 构建颜色映射
             const colorMap: Record<string, string> = {}
             data.nodes.forEach((node, index) => {
-                colorMap[node.name] = SCHEMA_COLORS[index % SCHEMA_COLORS.length]
+                colorMap[node.name] = node.color || SCHEMA_COLORS[index % SCHEMA_COLORS.length]
             })
 
-            // 构建图例
             setLegend(data.nodes.map((node, index) => ({
                 name: node.name,
-                color: SCHEMA_COLORS[index % SCHEMA_COLORS.length],
+                color: node.color || SCHEMA_COLORS[index % SCHEMA_COLORS.length],
             })))
 
-            // 构建 Cytoscape 元素
             const elements: any[] = []
 
             data.nodes.forEach((node) => {
@@ -179,13 +218,12 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
             if (!cyRef.current || !isMounted) return
 
             cyRef.current.json({ elements })
+            if (activeStep === 'TARGET' && sourceNode) {
+                cyRef.current.getElementById(sourceNode).addClass('selected-source')
+            }
             cyRef.current.layout({
                 name: 'cose',
-                animate: true,
-                animationDuration: 500,
-                nodeRepulsion: () => 10000,
-                idealEdgeLength: () => 150,
-                gravity: 0.2,
+                animate: false,
             }).run()
 
         } catch (err) {
@@ -196,8 +234,8 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
                         data: {
                             id: 'error',
                             label: 'Schema 加载失败',
-                            color: '#F16667',
-                            borderColor: '#C44',
+                            color: '#ef4444',
+                            borderColor: '#dc2626',
                         }
                     }],
                 })
@@ -205,39 +243,59 @@ export function SchemaViewer({ onNodeSelect }: SchemaViewerProps) {
         }
     }
 
+    const handleCenterGraph = () => {
+        cyRef.current?.fit(undefined, 40)
+    }
+
     return (
         <div className="relative w-full h-full">
-            {/* 标题 */}
-            <div className="absolute top-2 left-2 z-10 bg-white/90 px-3 py-1 rounded-lg shadow text-sm font-semibold text-blue-700">
-                📋 Ontology (Schema)
+            {/* Title Badge */}
+            <div className="absolute top-3 left-3 z-10">
+                <div className="bg-white/90 backdrop-blur-sm px-2.5 py-1 rounded-md shadow-sm text-xs font-medium text-slate-600 border border-slate-200">
+                    Ontology (Schema)
+                </div>
             </div>
 
-            {/* 图谱容器 */}
+            {/* Center Graph Button */}
+            <div className="absolute top-3 right-3 z-10">
+                <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleCenterGraph}
+                    className="h-7 w-7 p-0 bg-white/90 backdrop-blur-sm border-slate-200 hover:bg-white"
+                    title="居中显示图谱"
+                >
+                    <Crosshair className="h-3.5 w-3.5 text-slate-500" />
+                </Button>
+            </div>
+
+            {/* Graph Container */}
             <div
                 ref={containerRef}
-                className="w-full h-full rounded-lg"
+                className="w-full h-full rounded-lg border border-slate-200"
                 style={{
-                    background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%)',
+                    background: '#f8fafc',
                 }}
             />
 
-            {/* 图例 */}
+            {/* Legend */}
             {legend.length > 0 && (
-                <div className="absolute bottom-4 left-4 bg-black/70 text-white p-3 rounded-lg text-xs max-h-48 overflow-y-auto">
-                    <div className="font-semibold mb-2">Classes</div>
+                <div className="absolute bottom-3 left-3 bg-white/95 backdrop-blur-sm text-slate-700 p-2.5 rounded-lg text-xs max-h-40 overflow-y-auto border border-slate-200 shadow-sm">
+                    <div className="font-medium mb-1.5 text-slate-500 text-[10px] uppercase tracking-wide">Classes</div>
                     {legend.map((item) => (
-                        <div key={item.name} className="flex items-center gap-2 py-0.5">
+                        <div
+                            key={item.name}
+                            className="flex items-center gap-1.5 py-0.5"
+                        >
                             <div
-                                className="w-3 h-3 rounded-full"
+                                className="w-2.5 h-2.5 rounded-full flex-shrink-0"
                                 style={{ backgroundColor: item.color }}
                             />
-                            <span>{item.name}</span>
+                            <span className="truncate">{item.name}</span>
                         </div>
                     ))}
                 </div>
             )}
-
-
         </div>
     )
 }

@@ -1,0 +1,96 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+import "payment.proto";
+
+// Order messages
+
+message OrderItem {
+  int32 id = 1;
+  int32 order_id = 2;
+  int32 material_id = 3;
+  double quantity = 4;
+  double unit_price = 5;
+  double subtotal = 6;
+  double discount_percent = 7;
+  DeliveryStatus delivery_status = 8;
+}
+
+message PurchaseOrder {
+  int32 id = 1;
+  string order_number = 2;
+  int32 supplier_id = 3;
+  OrderStatus status = 4;
+  int64 order_date = 5;      // Unix timestamp
+  int64 delivery_date = 6;   // Unix timestamp
+  double total_amount = 7;
+  string payment_terms = 8;
+  string shipping_address = 9;
+  string notes = 10;
+  int64 created_at = 11;     // Unix timestamp
+  int64 updated_at = 12;     // Unix timestamp
+  repeated OrderItem items = 13;
+}
+
+message CreateOrderItemRequest {
+  int32 material_id = 1;
+  double quantity = 2;
+  double unit_price = 3;
+  double discount_percent = 4;
+}
+
+message CreateOrderRequest {
+  int32 supplier_id = 1;
+  OrderStatus status = 2;
+  int64 delivery_date = 3;   // Unix timestamp
+  string payment_terms = 4;
+  string shipping_address = 5;
+  string notes = 6;
+  repeated CreateOrderItemRequest items = 7;
+}
+
+message UpdateOrderRequest {
+  int32 id = 1;
+  optional OrderStatus status = 2;
+  optional int64 delivery_date = 3;
+  optional string payment_terms = 4;
+  optional string shipping_address = 5;
+  optional string notes = 6;
+}
+
+message GetOrderRequest {
+  oneof identifier {
+    int32 id = 1;
+    string order_number = 2;
+  }
+}
+
+message ListOrdersRequest {
+  PaginationRequest pagination = 1;
+  optional int32 supplier_id = 2;
+  optional OrderStatus status = 3;
+  optional int64 order_date_from = 4;  // Unix timestamp
+  optional int64 order_date_to = 5;    // Unix timestamp
+  bool include_items = 6;
+}
+
+message ListOrdersResponse {
+  repeated PurchaseOrder items = 1;
+  PaginationResponse pagination = 2;
+}
+
+message GetOrderPaymentsRequest {
+  int32 order_id = 1;
+}
+
+// Order service
+service OrderService {
+  rpc GetOrder(GetOrderRequest) returns (PurchaseOrder);
+  rpc CreateOrder(CreateOrderRequest) returns (PurchaseOrder);
+  rpc UpdateOrder(UpdateOrderRequest) returns (PurchaseOrder);
+  rpc DeleteOrder(GetOrderRequest) returns (Empty);
+  rpc ListOrders(ListOrdersRequest) returns (ListOrdersResponse);
+  rpc GetOrderPayments(GetOrderPaymentsRequest) returns (stream Payment);
+}

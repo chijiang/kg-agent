@@ -132,7 +132,7 @@ class OWLParser:
         return properties
 
     def _get_label(self, uri) -> str | None:
-        for _, label in self.graph.triples((uri, RDFS.label, None)):
+        for _, _, label in self.graph.triples((uri, RDFS.label, None)):
             return str(label)
         return None
 

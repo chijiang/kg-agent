@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+
+// Contract messages
+
+message Contract {
+  int32 id = 1;
+  string contract_number = 2;
+  int32 supplier_id = 3;
+  int32 material_id = 4;
+  int64 start_date = 5;      // Unix timestamp
+  int64 end_date = 6;        // Unix timestamp
+  double agreed_price = 7;
+  double min_quantity = 8;
+  double max_quantity = 9;
+  ContractStatus status = 10;
+  string terms = 11;
+  int64 created_at = 12;     // Unix timestamp
+  int64 updated_at = 13;     // Unix timestamp
+}
+
+message CreateContractRequest {
+  int32 supplier_id = 1;
+  int32 material_id = 2;
+  int64 start_date = 3;      // Unix timestamp
+  int64 end_date = 4;        // Unix timestamp
+  double agreed_price = 5;
+  double min_quantity = 6;
+  double max_quantity = 7;
+  ContractStatus status = 8;
+  string terms = 9;
+}
+
+message UpdateContractRequest {
+  int32 id = 1;
+  optional int64 end_date = 2;
+  optional double agreed_price = 3;
+  optional double min_quantity = 4;
+  optional double max_quantity = 5;
+  optional ContractStatus status = 6;
+  optional string terms = 7;
+}
+
+message GetContractRequest {
+  oneof identifier {
+    int32 id = 1;
+    string contract_number = 2;
+  }
+}
+
+message ListContractsRequest {
+  PaginationRequest pagination = 1;
+  optional int32 supplier_id = 2;
+  optional int32 material_id = 3;
+  optional ContractStatus status = 4;
+}
+
+message ListContractsResponse {
+  repeated Contract items = 1;
+  PaginationResponse pagination = 2;
+}
+
+// Contract service
+service ContractService {
+  rpc GetContract(GetContractRequest) returns (Contract);
+  rpc CreateContract(CreateContractRequest) returns (Contract);
+  rpc UpdateContract(UpdateContractRequest) returns (Contract);
+  rpc DeleteContract(GetContractRequest) returns (Empty);
+  rpc ListContracts(ListContractsRequest) returns (ListContractsResponse);
+}

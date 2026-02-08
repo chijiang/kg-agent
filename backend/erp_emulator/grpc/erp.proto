@@ -1,0 +1,12 @@
+syntax = "proto3";
+
+package erp;
+
+// Main ERP proto file that imports all service definitions
+
+import "supplier.proto";
+import "material.proto";
+import "order.proto";
+import "payment.proto";
+import "contract.proto";
+import "admin.proto";

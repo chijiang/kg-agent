@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+
+// Admin messages
+
+message SeedStats {
+  int32 suppliers = 1;
+  int32 materials = 2;
+  int32 contracts = 3;
+  int32 orders = 4;
+  int32 order_items = 5;
+  int32 payments = 6;
+}
+
+message SeedRequest {
+  optional int32 suppliers_count = 1;
+  optional int32 materials_count = 2;
+  optional int32 orders_count = 3;
+  optional int32 contracts_count = 4;
+}
+
+message SeedResponse {
+  SeedStats stats = 1;
+}
+
+message GetStatsResponse {
+  SeedStats stats = 1;
+}
+
+message ResetResponse {
+  string message = 1;
+  bool success = 2;
+}
+
+// Admin service
+service AdminService {
+  rpc SeedDatabase(SeedRequest) returns (SeedResponse);
+  rpc ResetDatabase(Empty) returns (ResetResponse);
+  rpc GetDatabaseStats(Empty) returns (GetStatsResponse);
+}

@@ -1,0 +1,76 @@
+syntax = "proto3";
+
+package erp;
+
+// Common messages and enums
+
+enum CreditRating {
+  CREDIT_RATING_UNSPECIFIED = 0;
+  CREDIT_RATING_A = 1;
+  CREDIT_RATING_B = 2;
+  CREDIT_RATING_C = 3;
+  CREDIT_RATING_D = 4;
+}
+
+enum EntityStatus {
+  STATUS_UNSPECIFIED = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_INACTIVE = 2;
+}
+
+enum OrderStatus {
+  ORDER_STATUS_UNSPECIFIED = 0;
+  ORDER_STATUS_DRAFT = 1;
+  ORDER_STATUS_PENDING = 2;
+  ORDER_STATUS_CONFIRMED = 3;
+  ORDER_STATUS_PARTIAL = 4;
+  ORDER_STATUS_DELIVERED = 5;
+  ORDER_STATUS_CANCELLED = 6;
+}
+
+enum PaymentStatus {
+  PAYMENT_STATUS_UNSPECIFIED = 0;
+  PAYMENT_STATUS_PENDING = 1;
+  PAYMENT_STATUS_PROCESSING = 2;
+  PAYMENT_STATUS_COMPLETED = 3;
+  PAYMENT_STATUS_FAILED = 4;
+  PAYMENT_STATUS_CANCELLED = 5;
+}
+
+enum PaymentMethod {
+  PAYMENT_METHOD_UNSPECIFIED = 0;
+  PAYMENT_METHOD_BANK_TRANSFER = 1;
+  PAYMENT_METHOD_CHECK = 2;
+  PAYMENT_METHOD_CREDIT_CARD = 3;
+  PAYMENT_METHOD_CASH = 4;
+}
+
+enum ContractStatus {
+  CONTRACT_STATUS_UNSPECIFIED = 0;
+  CONTRACT_STATUS_ACTIVE = 1;
+  CONTRACT_STATUS_EXPIRED = 2;
+  CONTRACT_STATUS_CANCELLED = 3;
+}
+
+enum DeliveryStatus {
+  DELIVERY_STATUS_UNSPECIFIED = 0;
+  DELIVERY_STATUS_PENDING = 1;
+  DELIVERY_STATUS_PARTIAL = 2;
+  DELIVERY_STATUS_COMPLETE = 3;
+}
+
+// Pagination
+message PaginationRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message PaginationResponse {
+  int32 total = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  int32 total_pages = 4;
+}
+
+// Empty message for void returns
+message Empty {}

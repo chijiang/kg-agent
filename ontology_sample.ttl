@@ -1,0 +1,181 @@
+@prefix base: <http://example.org/ontology#> .
+@prefix owl: <http://www.w3.org/2002/07/owl#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+base:appliesTo a owl:ObjectProperty ;
+    rdfs:domain base:DocumentStatus ;
+    rdfs:range base:BusinessDoc .
+
+base:belongsToLegalEntity a owl:ObjectProperty ;
+    rdfs:domain base:OrgUnit ;
+    rdfs:range base:LegalEntity .
+
+base:billedFor a owl:ObjectProperty ;
+    rdfs:domain base:SupplierInvoice ;
+    rdfs:range base:PurchaseOrder .
+
+base:changesStatus a owl:ObjectProperty ;
+    rdfs:domain base:BusinessEvent ;
+    rdfs:range base:DocumentStatus .
+
+base:classifiedAs a owl:ObjectProperty ;
+    rdfs:domain base:Material ;
+    rdfs:range base:PurchasingCategory .
+
+base:clears a owl:ObjectProperty ;
+    rdfs:domain base:Payment ;
+    rdfs:range base:SupplierInvoice .
+
+base:createdFrom a owl:ObjectProperty ;
+    rdfs:domain base:PurchaseOrder ;
+    rdfs:range base:PurchaseRequisition .
+
+base:fulfills a owl:ObjectProperty ;
+    rdfs:domain base:GoodsReceipt ;
+    rdfs:range base:PurchaseOrder .
+
+base:orderedFrom a owl:ObjectProperty ;
+    rdfs:domain base:PurchaseOrder ;
+    rdfs:range base:Supplier .
+
+base:prop_prop_approvalLevel a owl:DatatypeProperty ;
+    rdfs:domain base:PurchaseOrder .
+
+base:prop_prop_baseUnit a owl:DatatypeProperty ;
+    rdfs:domain base:Material .
+
+base:prop_prop_creditLevel a owl:DatatypeProperty ;
+    rdfs:domain base:Supplier .
+
+base:prop_prop_hasPaymentTerm a owl:DatatypeProperty ;
+    rdfs:domain base:BusinessPartner .
+
+base:prop_prop_mainBankAccount a owl:DatatypeProperty ;
+    rdfs:domain base:LegalEntity .
+
+base:prop_prop_validFrom a owl:DatatypeProperty ;
+    rdfs:domain base:PurchaseContract .
+
+base:referencesContract a owl:ObjectProperty ;
+    rdfs:domain base:PurchaseOrder ;
+    rdfs:range base:PurchaseContract .
+
+base:signedWith a owl:ObjectProperty ;
+    rdfs:domain base:PurchaseContract ;
+    rdfs:range base:BusinessPartner .
+
+
+### New Relationships
+
+base:raisedBy a owl:ObjectProperty ;
+    rdfs:label "raisedBy" ;
+    rdfs:comment "Indicates which Organizational Unit raised the Purchase Requisition." ;
+    rdfs:domain base:PurchaseRequisition ;
+    rdfs:range base:OrgUnit .
+
+base:processedBy a owl:ObjectProperty ;
+    rdfs:label "processedBy" ;
+    rdfs:comment "Indicates which Organizational Unit processed the Purchase Order." ;
+    rdfs:domain base:PurchaseOrder ;
+    rdfs:range base:OrgUnit .
+
+base:companyCode a owl:ObjectProperty ;
+    rdfs:label "companyCode" ;
+    rdfs:comment "Links a business document to the Legal Entity (Company Code) it belongs to." ;
+    rdfs:domain base:BusinessDoc ;
+    rdfs:range base:LegalEntity .
+
+base:consumesMaterial a owl:ObjectProperty ;
+    rdfs:label "consumesMaterial" ;
+    rdfs:comment "The material that is being ordered or consumed in the transaction." ;
+    rdfs:domain base:PurchaseOrder ;
+    rdfs:range base:Material .
+
+base:requestsMaterial a owl:ObjectProperty ;
+    rdfs:label "requestsMaterial" ;
+    rdfs:comment "The material requested in the requisition." ;
+    rdfs:domain base:PurchaseRequisition ;
+    rdfs:range base:Material .
+
+base:relatesTo a owl:ObjectProperty ;
+    rdfs:label "relatesTo" ;
+    rdfs:comment "Links a business event (e.g., approval, creation) to the relevant business document." ;
+    rdfs:domain base:BusinessEvent ;
+    rdfs:range base:BusinessDoc .
+
+base:invoicedBy a owl:ObjectProperty ;
+    rdfs:label "invoicedBy" ;
+    rdfs:comment "The supplier who issued the invoice." ;
+    rdfs:domain base:SupplierInvoice ;
+    rdfs:range base:Supplier .
+
+### Class Hierarchy Updates
+
+base:BusinessDoc a owl:Class ;
+    rdfs:label "BusinessDoc" ;
+    rdfs:comment "A generic class representing any business document in the procurement process." .
+
+base:BusinessEvent a owl:Class ;
+    rdfs:label "BusinessEvent" ;
+    rdfs:comment "An event that occurs during the lifecycle of a business document (e.g., Creation, Approval)." .
+
+base:GoodsReceipt a owl:Class ;
+    rdfs:label "GoodsReceipt" ;
+    rdfs:comment "Document acknowledging the receipt of goods." ;
+    rdfs:subClassOf base:BusinessDoc .
+
+base:OrgUnit a owl:Class ;
+    rdfs:label "OrgUnit" ;
+    rdfs:comment "An organizational unit within the enterprise (e.g., Department, Plant)." .
+
+base:Payment a owl:Class ;
+    rdfs:label "Payment" ;
+    rdfs:comment "A payment transaction made to a supplier." ;
+    rdfs:subClassOf base:BusinessDoc .
+
+base:PurchaseRequisition a owl:Class ;
+    rdfs:label "PurchaseRequisition" ;
+    rdfs:comment "A request to purchase goods or services." ;
+    rdfs:subClassOf base:BusinessDoc .
+
+base:PurchasingCategory a owl:Class ;
+    rdfs:label "PurchasingCategory" ;
+    rdfs:comment "Category for grouping materials or services for purchasing analysis." .
+
+base:BusinessPartner a owl:Class ;
+    rdfs:label "BusinessPartner" ;
+    rdfs:comment "An entity that the company does business with." .
+
+base:DocumentStatus a owl:Class ;
+    rdfs:label "DocumentStatus" ;
+    rdfs:comment "The current state of a document (e.g., Draft, Approved, Closed)." .
+
+base:LegalEntity a owl:Class ;
+    rdfs:label "LegalEntity" ;
+    rdfs:comment "A legal entity representing a company code." ;
+    rdfs:subClassOf base:OrgUnit .
+
+base:Material a owl:Class ;
+    rdfs:label "Material" ;
+    rdfs:comment "A product or service that can be traded." .
+
+base:Supplier a owl:Class ;
+    rdfs:label "Supplier" ;
+    rdfs:comment "An external vendor who provides goods or services." ;
+    rdfs:subClassOf base:BusinessPartner .
+
+base:SupplierInvoice a owl:Class ;
+    rdfs:label "SupplierInvoice" ;
+    rdfs:comment "A bill received from a supplier." ;
+    rdfs:subClassOf base:BusinessDoc .
+
+base:PurchaseContract a owl:Class ;
+    rdfs:label "PurchaseContract" ;
+    rdfs:comment "A long-term agreement with a supplier." ;
+    rdfs:subClassOf base:BusinessDoc .
+
+base:PurchaseOrder a owl:Class ;
+    rdfs:label "PurchaseOrder" ;
+    rdfs:comment "A formal order issued to a supplier." ;
+    rdfs:subClassOf base:BusinessDoc .
+

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+
+// Payment messages
+
+message Payment {
+  int32 id = 1;
+  int32 order_id = 2;
+  int64 payment_date = 3;    // Unix timestamp
+  double amount = 4;
+  PaymentMethod method = 5;
+  PaymentStatus status = 6;
+  string reference = 7;
+  string notes = 8;
+  int64 created_at = 9;      // Unix timestamp
+}
+
+message CreatePaymentRequest {
+  int32 order_id = 1;
+  int64 payment_date = 2;    // Unix timestamp
+  double amount = 3;
+  PaymentMethod method = 4;
+  PaymentStatus status = 5;
+  string reference = 6;
+  string notes = 7;
+}
+
+message UpdatePaymentRequest {
+  int32 id = 1;
+  optional double amount = 2;
+  optional PaymentMethod method = 3;
+  optional PaymentStatus status = 4;
+  optional string reference = 5;
+  optional string notes = 6;
+}
+
+message GetPaymentRequest {
+  int32 id = 1;
+}
+
+message ListPaymentsRequest {
+  PaginationRequest pagination = 1;
+  optional int32 order_id = 2;
+  optional PaymentStatus status = 3;
+  optional PaymentMethod method = 4;
+}
+
+message ListPaymentsResponse {
+  repeated Payment items = 1;
+  PaginationResponse pagination = 2;
+}
+
+// Payment service
+service PaymentService {
+  rpc GetPayment(GetPaymentRequest) returns (Payment);
+  rpc CreatePayment(CreatePaymentRequest) returns (Payment);
+  rpc UpdatePayment(UpdatePaymentRequest) returns (Payment);
+  rpc DeletePayment(GetPaymentRequest) returns (Empty);
+  rpc ListPayments(ListPaymentsRequest) returns (ListPaymentsResponse);
+}

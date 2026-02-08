@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+
+// Supplier messages
+
+message Supplier {
+  int32 id = 1;
+  string name = 2;
+  string code = 3;
+  string contact_person = 4;
+  string email = 5;
+  string phone = 6;
+  string address = 7;
+  CreditRating credit_rating = 8;
+  EntityStatus status = 9;
+  int64 created_at = 10;  // Unix timestamp
+  int64 updated_at = 11;  // Unix timestamp
+}
+
+message CreateSupplierRequest {
+  string name = 1;
+  string code = 2;
+  string contact_person = 3;
+  string email = 4;
+  string phone = 5;
+  string address = 6;
+  CreditRating credit_rating = 7;
+  EntityStatus status = 8;
+}
+
+message UpdateSupplierRequest {
+  int32 id = 1;
+  optional string name = 2;
+  optional string contact_person = 3;
+  optional string email = 4;
+  optional string phone = 5;
+  optional string address = 6;
+  optional CreditRating credit_rating = 7;
+  optional EntityStatus status = 8;
+}
+
+message GetSupplierRequest {
+  oneof identifier {
+    int32 id = 1;
+    string code = 2;
+  }
+}
+
+message ListSuppliersRequest {
+  PaginationRequest pagination = 1;
+  optional EntityStatus status = 2;
+  optional string search = 3;
+}
+
+message ListSuppliersResponse {
+  repeated Supplier items = 1;
+  PaginationResponse pagination = 2;
+}
+
+// Supplier service
+service SupplierService {
+  rpc GetSupplier(GetSupplierRequest) returns (Supplier);
+  rpc CreateSupplier(CreateSupplierRequest) returns (Supplier);
+  rpc UpdateSupplier(UpdateSupplierRequest) returns (Supplier);
+  rpc DeleteSupplier(GetSupplierRequest) returns (Empty);
+  rpc ListSuppliers(ListSuppliersRequest) returns (ListSuppliersResponse);
+}

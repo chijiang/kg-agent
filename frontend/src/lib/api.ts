@@ -128,6 +128,18 @@ export const graphApi = {
   // 更新实体属性
   updateEntity: (entityType: string, entityId: string, updates: Record<string, any>, token: string) =>
     api.put(`/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, updates),
+
+  // Ontology Schema 增删改查
+  addClass: (name: string, label?: string, dataProperties?: string[], color?: string) =>
+    api.post('/graph/ontology/classes', { name, label, data_properties: dataProperties, color }),
+  updateClass: (name: string, label?: string, dataProperties?: string[], color?: string) =>
+    api.put(`/graph/ontology/classes/${encodeURIComponent(name)}`, { label, data_properties: dataProperties, color }),
+  deleteClass: (name: string) =>
+    api.delete(`/graph/ontology/classes/${encodeURIComponent(name)}`),
+  addRelationship: (source: string, type: string, target: string) =>
+    api.post('/graph/ontology/relationships', { source, type, target }),
+  deleteRelationship: (source: string, type: string, target: string) =>
+    api.delete('/graph/ontology/relationships', { data: { source, type, target } }),
 }
 
 // Rule and Action Types

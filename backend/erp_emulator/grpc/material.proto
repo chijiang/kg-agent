@@ -1,0 +1,70 @@
+syntax = "proto3";
+
+package erp;
+
+import "common.proto";
+
+// Material messages
+
+message Material {
+  int32 id = 1;
+  string name = 2;
+  string code = 3;
+  string category = 4;
+  string unit = 5;
+  double standard_price = 6;
+  int32 lead_time_days = 7;
+  int32 min_order_quantity = 8;
+  string description = 9;
+  int64 created_at = 10;  // Unix timestamp
+  int64 updated_at = 11;  // Unix timestamp
+}
+
+message CreateMaterialRequest {
+  string name = 1;
+  string code = 2;
+  string category = 3;
+  string unit = 4;
+  double standard_price = 5;
+  int32 lead_time_days = 6;
+  int32 min_order_quantity = 7;
+  string description = 8;
+}
+
+message UpdateMaterialRequest {
+  int32 id = 1;
+  optional string name = 2;
+  optional string category = 3;
+  optional string unit = 4;
+  optional double standard_price = 5;
+  optional int32 lead_time_days = 6;
+  optional int32 min_order_quantity = 7;
+  optional string description = 8;
+}
+
+message GetMaterialRequest {
+  oneof identifier {
+    int32 id = 1;
+    string code = 2;
+  }
+}
+
+message ListMaterialsRequest {
+  PaginationRequest pagination = 1;
+  optional string category = 2;
+  optional string search = 3;
+}
+
+message ListMaterialsResponse {
+  repeated Material items = 1;
+  PaginationResponse pagination = 2;
+}
+
+// Material service
+service MaterialService {
+  rpc GetMaterial(GetMaterialRequest) returns (Material);
+  rpc CreateMaterial(CreateMaterialRequest) returns (Material);
+  rpc UpdateMaterial(UpdateMaterialRequest) returns (Material);
+  rpc DeleteMaterial(GetMaterialRequest) returns (Empty);
+  rpc ListMaterials(ListMaterialsRequest) returns (ListMaterialsResponse);
+}
