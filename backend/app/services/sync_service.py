@@ -218,7 +218,16 @@ class SyncService:
                                     entity = ent_result.scalar_one_or_none()
 
                                     if entity:
-                                        entity.properties = properties
+                                        # Merge existing properties with new ones
+                                        # New properties from source take precedence over existing ones
+                                        # Unbound properties (manually added) are preserved
+                                        existing_props = (
+                                            dict(entity.properties)
+                                            if entity.properties
+                                            else {}
+                                        )
+                                        existing_props.update(properties)
+                                        entity.properties = existing_props
                                         total_updated += 1
                                     else:
                                         new_entity = GraphEntity(
