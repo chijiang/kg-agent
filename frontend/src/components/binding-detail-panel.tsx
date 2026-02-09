@@ -70,8 +70,16 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
     const [isAddingProp, setIsAddingProp] = useState(false)
     const [newProp, setNewProp] = useState({
         ontology_property: '',
-        grpc_field: ''
+        grpc_field: '',
+        transformation: 'None'
     })
+
+    const TRANSFORMATION_OPTIONS = [
+        { label: '无 (None)', value: 'None' },
+        { label: '数字解析 (parseNum)', value: 'parseNum' },
+        { label: '转字符串 (toString)', value: 'toString' },
+        { label: '转日期 (toDate)', value: 'toDate' },
+    ]
     const [isCustomProp, setIsCustomProp] = useState(false)
 
     // Relationship specific state
@@ -239,12 +247,19 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
     const handleCreatePropertyMapping = async () => {
         if (!activeMappingId || !newProp.ontology_property || !newProp.grpc_field) return
         try {
+            let transform_expression = undefined
+            if (newProp.transformation !== 'None') {
+                transform_expression = `${newProp.transformation}(value)`
+            }
+
             await dataMappingsApi.createPropertyMapping(activeMappingId, {
-                ontology_property: newProp.ontology_property,
-                grpc_field: newProp.grpc_field
+                ontology_property: newProp.ontology_property.split(':')[0],
+                grpc_field: newProp.grpc_field,
+                transform_expression: transform_expression
             })
             toast.success('属性映射已添加')
             setIsAddingProp(false)
+            setNewProp({ ontology_property: '', grpc_field: '', transformation: 'None' })
             handleLoadPropertyMappings(activeMappingId)
         } catch (err) {
             toast.error('添加失败')
@@ -495,9 +510,16 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
                                                         {propertyMappings.map(pm => (
                                                             <div key={pm.id} className="flex items-center justify-between text-[10px] bg-slate-50 rounded px-2 py-1.5 border border-slate-100 group/pm">
                                                                 <div className="flex items-center gap-1.5 truncate">
-                                                                    <span className="font-medium text-slate-600 truncate">{pm.ontology_property}</span>
+                                                                    <span className="font-medium text-slate-600 truncate">{pm.ontology_property.split(':')[0]}</span>
                                                                     <ArrowRight className="h-2 w-2 text-slate-300" />
-                                                                    <span className="font-mono text-indigo-600 truncate">{pm.grpc_field}</span>
+                                                                    <div className="flex items-center gap-1 min-w-0">
+                                                                        <span className="font-mono text-indigo-600 truncate">{pm.grpc_field}</span>
+                                                                        {pm.transform_expression && (
+                                                                            <span className="text-[8px] bg-blue-50 text-blue-500 px-1 rounded flex-shrink-0">
+                                                                                {pm.transform_expression}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
                                                                 </div>
                                                                 <button onClick={() => handleDeletePropertyMapping(pm.id)} className="opacity-0 group-hover/pm:opacity-100 hover:text-red-500">
                                                                     <Trash2 className="h-3 w-3" />
@@ -525,9 +547,19 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
                                                                                     <SelectValue placeholder="本体属性" />
                                                                                 </SelectTrigger>
                                                                                 <SelectContent>
-                                                                                    {node.dataProperties?.map(p => (
-                                                                                        <SelectItem key={p} value={p}>{p}</SelectItem>
-                                                                                    ))}
+                                                                                    {node.dataProperties?.map(p => {
+                                                                                        const [name, type] = p.split(':')
+                                                                                        return (
+                                                                                            <SelectItem key={p} value={name}>
+                                                                                                <div className="flex justify-between w-full items-center gap-2">
+                                                                                                    <span>{name}</span>
+                                                                                                    <span className="text-[9px] text-slate-400 bg-slate-100 px-1 rounded">
+                                                                                                        {type || 'string'}
+                                                                                                    </span>
+                                                                                                </div>
+                                                                                            </SelectItem>
+                                                                                        )
+                                                                                    })}
                                                                                 </SelectContent>
                                                                             </Select>
                                                                         ) : (
@@ -557,6 +589,17 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
                                                                     <SelectContent>
                                                                         {selectedProductSchema?.message_types.find(mt => mt.name === m.grpc_message_type)?.fields.map((f: any) => (
                                                                             <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+
+                                                                <Select value={newProp.transformation} onValueChange={(v) => setNewProp({ ...newProp, transformation: v })}>
+                                                                    <SelectTrigger className="h-7 text-[10px]">
+                                                                        <SelectValue placeholder="转换方法 (可选)" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent>
+                                                                        {TRANSFORMATION_OPTIONS.map(opt => (
+                                                                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                                                                         ))}
                                                                     </SelectContent>
                                                                 </Select>

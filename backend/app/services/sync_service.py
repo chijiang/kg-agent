@@ -12,6 +12,7 @@ from typing import List, Dict, Any, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, update, and_
 from sqlalchemy.orm import selectinload
+import re
 
 from app.models.data_product import (
     DataProduct,
@@ -22,6 +23,47 @@ from app.models.data_product import (
 )
 from app.models.graph import GraphEntity, GraphRelationship
 from app.services.grpc_client import DynamicGrpcClient
+
+
+def parse_num(value):
+    if value is None:
+        return None
+    if isinstance(value, (int, float)):
+        return value
+    try:
+        if "." in str(value):
+            return float(value)
+        return int(value)
+    except (ValueError, TypeError):
+        return None
+
+
+def to_string(value):
+    if value is None:
+        return ""
+    return str(value)
+
+
+def to_date(value):
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value
+    # Handle common date formats
+    date_str = str(value)
+    for fmt in (
+        "%Y-%m-%d",
+        "%Y/%m/%d",
+        "%d/%m/%Y",
+        "%Y-%m-%dT%H:%M:%S",
+        "%Y-%m-%d %H:%M:%S",
+    ):
+        try:
+            return datetime.strptime(date_str, fmt)
+        except (ValueError, TypeError):
+            continue
+    return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -192,7 +234,18 @@ class SyncService:
                                         val = item.get(p_map.grpc_field)
                                         if p_map.transform_expression:
                                             try:
-                                                safe_dict = {"value": val, "item": item}
+                                                safe_dict = {
+                                                    "value": val,
+                                                    "item": item,
+                                                    "parseNum": parse_num,
+                                                    "toString": to_string,
+                                                    "toDate": to_date,
+                                                    "str": str,
+                                                    "float": float,
+                                                    "int": int,
+                                                    "bool": bool,
+                                                    "datetime": datetime,
+                                                }
                                                 val = eval(
                                                     p_map.transform_expression,
                                                     {"__builtins__": {}},

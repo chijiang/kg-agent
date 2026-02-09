@@ -36,3 +36,5 @@ backend/logs/
 # OS files
 .DS_Store
 
+dev_backlog.txt
+

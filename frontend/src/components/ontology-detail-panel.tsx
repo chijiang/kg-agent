@@ -9,6 +9,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 import { Label } from '@/components/ui/label'
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 import { Selection, OntologyNode } from '@/app/graph/ontology/page'
 
@@ -49,6 +56,9 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
     // Inline property addition
     const [isAddingProp, setIsAddingProp] = useState(false)
     const [newProp, setNewProp] = useState('')
+    const [newPropType, setNewPropType] = useState('string')
+
+    const DATA_TYPES = ['string', 'int', 'float', 'boolean', 'date', 'datetime', 'None']
 
     // Edge specific state
     const [edgeType, setEdgeType] = useState('')
@@ -161,12 +171,14 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
     }
 
     const handleConfirmAddProperty = () => {
-        if (!newProp.trim() || !newProp.includes(':')) {
-            toast.error('请按照 name:type 格式输入')
+        if (!newProp.trim()) {
+            toast.error('请输入属性名')
             return
         }
-        setEditingProperties([...editingProperties, newProp.trim()])
+        const fullProp = `${newProp.trim()}:${newPropType}`
+        setEditingProperties([...editingProperties, fullProp])
         setNewProp('')
+        setNewPropType('string')
         setIsAddingProp(false)
     }
 
@@ -367,17 +379,33 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                             </h4>
 
                             {isEditMode && isAddingProp && (
-                                <div className="flex gap-1.5 mb-2 bg-blue-50 p-1.5 rounded border border-blue-100">
-                                    <Input
-                                        placeholder="name:type"
-                                        value={newProp}
-                                        onChange={(e) => setNewProp(e.target.value)}
-                                        className="h-6 text-xs bg-white"
-                                        autoFocus
-                                        onKeyDown={(e) => e.key === 'Enter' && handleConfirmAddProperty()}
-                                    />
-                                    <Button size="sm" className="h-6 px-2 text-xs" onClick={handleConfirmAddProperty}>确定</Button>
-                                    <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs" onClick={() => setIsAddingProp(false)}>×</Button>
+                                <div className="flex flex-col gap-2 mb-2 bg-blue-50 p-2 rounded border border-blue-100">
+                                    <div className="flex gap-1.5">
+                                        <Input
+                                            placeholder="属性名, 如: status"
+                                            value={newProp}
+                                            onChange={(e) => setNewProp(e.target.value)}
+                                            className="h-7 text-xs bg-white flex-1"
+                                            autoFocus
+                                            onKeyDown={(e) => e.key === 'Enter' && handleConfirmAddProperty()}
+                                        />
+                                        <Select value={newPropType} onValueChange={setNewPropType}>
+                                            <SelectTrigger className="h-7 text-xs bg-white w-[90px]">
+                                                <SelectValue placeholder="类型" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {DATA_TYPES.map(type => (
+                                                    <SelectItem key={type} value={type} className="text-xs">
+                                                        {type}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                    <div className="flex gap-1.5 justify-end">
+                                        <Button size="sm" variant="ghost" className="h-6 px-2 text-xs" onClick={() => setIsAddingProp(false)}>取消</Button>
+                                        <Button size="sm" className="h-6 px-3 text-xs" onClick={handleConfirmAddProperty}>确定</Button>
+                                    </div>
                                 </div>
                             )}
 
@@ -388,7 +416,14 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                                             key={i}
                                             className="group flex items-center justify-between px-2 py-1 bg-slate-50 rounded text-xs font-mono text-slate-600 border border-slate-100"
                                         >
-                                            <span className="truncate">{prop}</span>
+                                            <div className="flex justify-between w-full items-center min-w-0">
+                                                <span className="truncate font-medium">{prop.split(':')[0]}</span>
+                                                {prop.includes(':') && (
+                                                    <span className="text-[9px] text-slate-400 ml-2 px-1 bg-slate-100 rounded flex-shrink-0">
+                                                        {prop.split(':')[1]}
+                                                    </span>
+                                                )}
+                                            </div>
                                             {isEditMode && (
                                                 <button onClick={() => handleRemoveProperty(i)} className="opacity-0 group-hover:opacity-100 text-red-400 hover:text-red-600">
                                                     <Trash2 className="h-2.5 w-2.5" />

@@ -105,7 +105,15 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
     const [propertyForm, setPropertyForm] = useState({
         ontology_property: '',
         grpc_field: '',
+        transformation: 'None',
     })
+
+    const TRANSFORMATION_OPTIONS = [
+        { label: '无 (None)', value: 'None' },
+        { label: '数字解析 (parseNum)', value: 'parseNum' },
+        { label: '转字符串 (toString)', value: 'toString' },
+        { label: '转日期 (toDate)', value: 'toDate' },
+    ]
     const [creatingProperty, setCreatingProperty] = useState(false)
 
     // Relationship mapping dialog
@@ -264,12 +272,22 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
 
         try {
             setCreatingProperty(true)
-            await dataMappingsApi.createPropertyMapping(selectedEntityMapping.id, propertyForm)
+
+            let transform_expression = undefined
+            if (propertyForm.transformation !== 'None') {
+                transform_expression = `${propertyForm.transformation}(value)`
+            }
+
+            await dataMappingsApi.createPropertyMapping(selectedEntityMapping.id, {
+                ontology_property: propertyForm.ontology_property.split(':')[0],
+                grpc_field: propertyForm.grpc_field,
+                transform_expression: transform_expression
+            })
             toast.success('创建成功', {
                 description: '属性映射已创建',
             })
             setPropertyDialogOpen(false)
-            setPropertyForm({ ontology_property: '', grpc_field: '' })
+            setPropertyForm({ ontology_property: '', grpc_field: '', transformation: 'None' })
             loadPropertyMappings(selectedEntityMapping.id)
             loadData() // Refresh count
         } catch (error: any) {
@@ -629,12 +647,19 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
                                                                 <div className="flex items-center gap-3">
                                                                     <div className="flex flex-col">
                                                                         <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">图谱属性</span>
-                                                                        <span className="text-sm font-mono font-bold">{prop.ontology_property}</span>
+                                                                        <span className="text-sm font-mono font-bold">{prop.ontology_property.split(':')[0]}</span>
                                                                     </div>
                                                                     <ArrowRight className="w-3.5 h-3.5 text-muted-foreground mx-1" />
                                                                     <div className="flex flex-col">
                                                                         <span className="text-xs text-muted-foreground uppercase tracking-widest font-bold">数据源字段</span>
-                                                                        <span className="text-sm font-mono font-bold">{prop.grpc_field}</span>
+                                                                        <div className="flex items-center gap-1.5">
+                                                                            <span className="text-sm font-mono font-bold">{prop.grpc_field}</span>
+                                                                            {prop.transform_expression && (
+                                                                                <span className="text-[10px] bg-blue-100 text-blue-600 px-1.5 py-0.5 rounded font-mono">
+                                                                                    {prop.transform_expression}
+                                                                                </span>
+                                                                            )}
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                                 <Button
@@ -929,11 +954,19 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
                                         <SelectValue placeholder="选择属性" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                        {getSelectedMappingClass()?.data_properties.map((prop: string) => (
-                                            <SelectItem key={prop} value={prop.split(':')[0]}>
-                                                {prop}
-                                            </SelectItem>
-                                        ))}
+                                        {getSelectedMappingClass()?.data_properties.map((prop: string) => {
+                                            const [name, type] = prop.split(':')
+                                            return (
+                                                <SelectItem key={prop} value={name}>
+                                                    <div className="flex justify-between w-full items-center">
+                                                        <span>{name}</span>
+                                                        <span className="text-[10px] text-muted-foreground ml-2 px-1 bg-muted rounded">
+                                                            {type || 'string'}
+                                                        </span>
+                                                    </div>
+                                                </SelectItem>
+                                            )
+                                        })}
                                     </SelectContent>
                                 </Select>
                             ) : (
@@ -952,6 +985,25 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
                                 value={propertyForm.grpc_field}
                                 onChange={(e) => setPropertyForm({ ...propertyForm, grpc_field: e.target.value })}
                             />
+                        </div>
+
+                        <div className="grid gap-2">
+                            <Label>数据转换 (可选)</Label>
+                            <Select
+                                value={propertyForm.transformation}
+                                onValueChange={(v: string) => setPropertyForm({ ...propertyForm, transformation: v })}
+                            >
+                                <SelectTrigger>
+                                    <SelectValue placeholder="选择转换函数" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    {TRANSFORMATION_OPTIONS.map((opt) => (
+                                        <SelectItem key={opt.value} value={opt.value}>
+                                            {opt.label}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
                         </div>
                     </div>
 

@@ -91,12 +91,25 @@ class PGGraphStorage:
 
     # ==================== 基础操作 ====================
 
-    async def clear_graph(self):
-        """清除全部图谱数据，包括实例和本体"""
+    async def clear_graph(self, clear_ontology: bool = True):
+        """清除图谱数据
+
+        Args:
+            clear_ontology: 是否同时清除本体定义（SchemaClass/SchemaRelationship）
+        """
+        # 先清除实例数据
         await self.db.execute(delete(GraphRelationship))
-        await self.db.execute(delete(GraphEntity))
-        await self.db.execute(delete(SchemaRelationship))
-        await self.db.execute(delete(SchemaClass))
+        await self.db.execute(
+            delete(GraphEntity).where(GraphEntity.is_instance == True)
+        )
+
+        # 如果需要，清除本体数据
+        if clear_ontology:
+            await self.db.execute(delete(SchemaRelationship))
+            await self.db.execute(delete(SchemaClass))
+            # 同时清除所有 GraphEntity，包括那些作为 Schema 定义的（如果有的话）
+            await self.db.execute(delete(GraphEntity))
+
         await self.db.commit()
 
     async def update_entity(
@@ -513,14 +526,17 @@ class PGGraphStorage:
     ) -> List[Dict]:
         """获取 1 跳邻居（简化实现）"""
         # 先获取起始节点
+        # 先获取起始节点
         result = await self.db.execute(
-            select(GraphEntity.id).where(
+            select(GraphEntity).where(
                 GraphEntity.name == instance_name, GraphEntity.is_instance == True
             )
         )
-        start_node = result.scalar_one_or_none()
-        if not start_node:
+        start_entity = result.scalar_one_or_none()
+        if not start_entity:
             return []
+
+        start_node = start_entity.id
 
         # 根据方向查询关系
         if direction == "outgoing":
@@ -657,8 +673,12 @@ class PGGraphStorage:
                 {
                     "id": instance_name,
                     "label": instance_name,
-                    "type": "Entity",
-                    "properties": {},
+                    "type": start_entity.entity_type,
+                    "properties": {
+                        k: v
+                        for k, v in (start_entity.properties or {}).items()
+                        if not k.startswith("__")
+                    },
                 }
             )
 
@@ -691,13 +711,15 @@ class PGGraphStorage:
         """获取多跳邻居（使用 SQL 原生查询）"""
         # 获取起始节点 ID
         result = await self.db.execute(
-            select(GraphEntity.id).where(
+            select(GraphEntity).where(
                 GraphEntity.name == instance_name, GraphEntity.is_instance == True
             )
         )
-        start_id = result.scalar_one_or_none()
-        if not start_id:
+        start_entity = result.scalar_one_or_none()
+        if not start_entity:
             return []
+
+        start_id = start_entity.id
 
         # 构建方向过滤条件
         if direction == "outgoing":
@@ -779,8 +801,12 @@ class PGGraphStorage:
             {
                 "id": instance_name,
                 "label": instance_name,
-                "type": "Entity",
-                "properties": {},
+                "type": start_entity.entity_type,
+                "properties": {
+                    k: v
+                    for k, v in (start_entity.properties or {}).items()
+                    if not k.startswith("__")
+                },
             }
         )
 

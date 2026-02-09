@@ -117,7 +117,8 @@ export const graphApi = {
     api.get(`/graph/nodes?label=${encodeURIComponent(label)}&limit=${limit}`),
   getStatistics: (token: string) => api.get('/graph/statistics'),
   getSchema: (token: string) => api.get('/graph/schema'),
-  clear: () => api.post('/graph/clear'),
+  clear: (clearOntology: boolean = true) =>
+    api.post('/graph/clear', null, { params: { clear_ontology: clearOntology } }),
 
   // 搜索实例
   searchInstances: (className: string, keyword: string, filters: Record<string, any>, limit: number, token: string) =>

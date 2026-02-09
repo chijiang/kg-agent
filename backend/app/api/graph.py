@@ -54,13 +54,14 @@ async def import_graph(
 
 @router.post("/clear")
 async def clear_graph(
+    clear_ontology: bool = True,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """清除全部图谱数据"""
+    """清除图谱数据"""
     storage = PGGraphStorage(db)
-    await storage.clear_graph()
-    return {"message": "Graph cleared successfully"}
+    await storage.clear_graph(clear_ontology=clear_ontology)
+    return {"message": f"Graph cleared successfully (ontology={clear_ontology})"}
 
 
 @router.get("/node/{uri:path}")
