@@ -270,7 +270,7 @@
     "preconditionDesc": "Precondition check",
     "onFailure": "ON_FAILURE: \"message\"",
     "onFailureDesc": "Error message when condition fails",
-    "effect": "EFFECT { ... }",
+    "effect": "EFFECT '{' ... '}'",
     "effectDesc": "Action execution effect",
     "setEntityProperty": "SET this.prop = value;",
     "setEntityPropertyDesc": "Set entity property",

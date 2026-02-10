@@ -270,7 +270,7 @@
     "preconditionDesc": "前置条件检查",
     "onFailure": "ON_FAILURE: \"message\"",
     "onFailureDesc": "条件失败时的错误消息",
-    "effect": "EFFECT { ... }",
+    "effect": "EFFECT '{' ... '}'",
     "effectDesc": "动作执行效果",
     "setEntityProperty": "SET this.prop = value;",
     "setEntityPropertyDesc": "设置实体属性",
