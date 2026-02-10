@@ -6,6 +6,7 @@ import { graphApi } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import { Crosshair } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useTranslations } from 'next-intl'
 
 // Professional color palette (muted, harmonious)
 const SCHEMA_COLORS = [
@@ -51,6 +52,7 @@ export function SchemaViewer({
 }: SchemaViewerProps) {
     const containerRef = useRef<HTMLDivElement>(null)
     const cyRef = useRef<Core | null>(null)
+    const t = useTranslations('components.schemaViewer')
     const token = useAuthStore((state) => state.token)
     const [selectedNode, setSelectedNode] = useState<any>(null)
     const [legend, setLegend] = useState<{ name: string; color: string }[]>([])
@@ -234,7 +236,7 @@ export function SchemaViewer({
                     elements: [{
                         data: {
                             id: 'error',
-                            label: 'Schema 加载失败',
+                            label: t('loadFailed'),
                             color: '#ef4444',
                             borderColor: '#dc2626',
                         }
@@ -264,7 +266,7 @@ export function SchemaViewer({
                     size="sm"
                     onClick={handleCenterGraph}
                     className="h-7 w-7 p-0 bg-white/90 backdrop-blur-sm border-slate-200 hover:bg-white"
-                    title="居中显示图谱"
+                    title={t('centerGraph')}
                 >
                     <Crosshair className="h-3.5 w-3.5 text-slate-500" />
                 </Button>

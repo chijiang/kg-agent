@@ -73,12 +73,18 @@ async def get_node(
     """获取节点详情"""
     storage = PGGraphStorage(db)
 
-    # 首先尝试按 name 查找
+    # 1. 尝试按数字 ID 查找
+    if uri.isdigit():
+        entity = await storage.get_entity_by_id(int(uri))
+        if entity:
+            return entity
+
+    # 2. 尝试按 name 查找
     entity = await storage.get_entity_by_name(uri)
     if entity:
         return entity
 
-    # 如果没找到，尝试按 URI 查找
+    # 3. 尝试按 URI 查找
     from app.models.graph import GraphEntity
 
     result = await db.execute(select(GraphEntity).where(GraphEntity.uri == uri))
@@ -343,4 +349,16 @@ async def delete_ontology_relationship(
     )
     if "error" in result:
         raise HTTPException(status_code=400, detail=result["error"])
+    return result
+
+
+@router.get("/instances/random")
+async def get_random_instances(
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取随机实例图谱作为初始展示"""
+    storage = PGGraphStorage(db)
+    result = await storage.get_random_graph(limit)
     return result

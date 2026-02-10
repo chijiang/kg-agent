@@ -288,7 +288,7 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
         }
 
         if (isReservedKeyword(propertyForm.ontology_property)) {
-            const proceed = confirm(`注意：属性名称 "${propertyForm.ontology_property}" 是系统保留关键字，直接使用可能会导致不可预知的冲突。确定要继续吗？`)
+            const proceed = confirm(tMappings('reservedKeywordConfirm', { prop: propertyForm.ontology_property }))
             if (!proceed) return
         }
 
@@ -973,8 +973,8 @@ export default function DataMappingsPage({ params }: { params: Promise<{ id: str
                             <div className="bg-amber-50 border border-amber-200 rounded-lg p-3 flex gap-3 animate-in fade-in slide-in-from-top-2">
                                 <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0" />
                                 <div className="text-xs text-amber-800">
-                                    <p className="font-bold mb-1">系统保留字警告</p>
-                                    <p>属性名称 "{propertyForm.ontology_property}" 是系统保留字段。映射到此字段可能会导致数据冲突或同步失败。建议使用其他名称（例如 "source_id"）。</p>
+                                    <p className="font-bold mb-1">{tMappings('reservedKeywordWarningTitle')}</p>
+                                    <p>{tMappings('reservedKeywordWarningDesc', { prop: propertyForm.ontology_property })}</p>
                                 </div>
                             </div>
                         )}

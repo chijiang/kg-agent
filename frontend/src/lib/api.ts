@@ -126,6 +126,10 @@ export const graphApi = {
       params: { class_name: className, keyword, limit, ...filters }
     }),
 
+  // 获取随机实例（初始渲染）
+  getRandomInstances: (limit: number = 200) =>
+    api.get('/graph/instances/random', { params: { limit } }),
+
   // 更新实体属性
   updateEntity: (entityType: string, entityId: string, updates: Record<string, any>, token: string) =>
     api.put(`/graph/entities/${encodeURIComponent(entityType)}/${encodeURIComponent(entityId)}`, updates),

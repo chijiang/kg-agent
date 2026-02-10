@@ -112,16 +112,42 @@ class PGGraphStorage:
 
         await self.db.commit()
 
+    async def get_entity_by_id(self, entity_id: int) -> Optional[Dict]:
+        """根据数据库 ID 获取实体详情"""
+        result = await self.db.execute(
+            select(GraphEntity).where(
+                GraphEntity.id == entity_id, GraphEntity.is_instance == True
+            )
+        )
+        entity = result.scalar_one_or_none()
+
+        if not entity:
+            return None
+
+        return {
+            "id": entity.id,
+            "name": entity.name,
+            "entity_type": entity.entity_type,
+            "properties": {
+                k: v
+                for k, v in (entity.properties or {}).items()
+                if not k.startswith("__")
+            },
+            "aliases": (entity.properties or {}).get("__aliases__", []),
+        }
+
     async def update_entity(
         self, entity_type: str, entity_id: str, updates: Dict[str, Any]
     ) -> Dict[str, Any]:
         """更新实体属性并触发事件"""
-        # 获取旧值
-        result = await self.db.execute(
-            select(GraphEntity).where(
-                GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type
-            )
-        )
+        # 尝试按 ID 或 name 查找
+        query = select(GraphEntity).where(GraphEntity.entity_type == entity_type)
+        if entity_id.isdigit():
+            query = query.where(GraphEntity.id == int(entity_id))
+        else:
+            query = query.where(GraphEntity.name == entity_id)
+
+        result = await self.db.execute(query)
         entity = result.scalar_one_or_none()
 
         if not entity:
@@ -1212,3 +1238,60 @@ class PGGraphStorage:
             "total_classes": class_count,
             "total_schema_relationships": schema_rel_count,
         }
+
+    async def get_random_graph(self, limit: int = 100) -> Dict[str, List[Dict]]:
+        """获取随机的实例图谱片段（节点 + 关系）"""
+        # 1. 随机获取一些节点
+        query = (
+            select(GraphEntity)
+            .where(GraphEntity.is_instance == True)
+            .order_by(func.random())
+            .limit(limit)
+        )
+        result = await self.db.execute(query)
+        entities = result.scalars().all()
+
+        if not entities:
+            return {"nodes": [], "relationships": []}
+
+        entity_ids = [e.id for e in entities]
+        entity_map = {e.id: e for e in entities}
+
+        # 2. 获取这些节点之间的关系
+        rel_query = select(GraphRelationship).where(
+            and_(
+                GraphRelationship.source_id.in_(entity_ids),
+                GraphRelationship.target_id.in_(entity_ids),
+            )
+        )
+        rel_result = await self.db.execute(rel_query)
+        relationships = rel_result.scalars().all()
+
+        # 3. 组装结果
+        nodes_data = [
+            {
+                "id": e.id,
+                "name": e.name,
+                "label": e.name,
+                "nodeLabel": e.entity_type,
+                "labels": [e.entity_type],
+                "properties": {
+                    k: v
+                    for k, v in (e.properties or {}).items()
+                    if not k.startswith("__")
+                },
+            }
+            for e in entities
+        ]
+
+        rels_data = [
+            {
+                "id": r.id,
+                "source": r.source_id,
+                "target": r.target_id,
+                "type": r.relationship_type,
+            }
+            for r in relationships
+        ]
+
+        return {"nodes": nodes_data, "relationships": rels_data}

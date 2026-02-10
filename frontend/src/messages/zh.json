@@ -53,7 +53,8 @@
     "at": "在",
     "by": "由",
     "with": "与",
-    "as": "作为"
+    "as": "作为",
+    "preview": "预览版"
   },
   "auth": {
     "login": "登录",
@@ -421,14 +422,23 @@
     "transformNone": "无",
     "transformParseNum": "数字解析",
     "transformToString": "转字符串 (toString)",
-    "transformToDate": "转日期"
+    "transformToDate": "转日期",
+    "reservedKeywordWarningTitle": "系统保留字警告",
+    "reservedKeywordWarningDesc": "属性名称 \"{prop}\" 是系统保留字段。映射到此字段可能会导致数据冲突或同步失败。建议使用其他名称（例如 \"source_id\"）。",
+    "reservedKeywordConfirm": "注意：属性名称 \"{prop}\" 是系统保留关键字，直接使用可能会导致不可预知的冲突。确定要继续吗？"
   },
   "components": {
     "chat": {
       "placeholder": "输入您的问题...",
       "send": "发送",
       "thinking": "思考过程",
-      "error": "抱歉，发生了错误"
+      "error": "抱歉，发生了错误",
+      "startExploring": "开始探索知识图谱",
+      "tryQuestions": "尝试以下问题：",
+      "previewUpdated": "预览图谱已更新",
+      "exampleQ1": "PO_2024_001 是向哪个供应商订购的？",
+      "exampleQ2": "采购订单有哪些相关实体？",
+      "exampleQ3": "付款和订单之间有什么关系？"
     },
     "conversation": {
       "newChat": "新对话",
@@ -479,6 +489,31 @@
       "checkConfig": "请检查配置",
       "confirmUnbindRelationship": "确定要解除此关系绑定吗？",
       "relationshipUnbindSuccess": "关系绑定已解除"
+    },
+    "graphPreview": {
+      "pauseLabel": "暂停动画",
+      "startLabel": "启动动画",
+      "zoomIn": "放大",
+      "zoomOut": "缩小",
+      "fit": "适应屏幕",
+      "reset": "重新布局",
+      "nodeDetails": "节点详情",
+      "type": "类型",
+      "properties": "属性",
+      "relationships": "关系",
+      "nodes": "节点",
+      "edges": "关系",
+      "emptyMsg": "提问后将在此显示知识图谱"
+    },
+    "instanceGraph": {
+      "title": "实例图谱",
+      "noResults": "未找到匹配的实例",
+      "selectFilters": "请选择筛选条件并点击查询",
+      "loading": "加载中..."
+    },
+    "schemaViewer": {
+      "centerGraph": "居中显示图谱",
+      "loadFailed": "Schema 加载失败"
     },
     "ontology": {
       "classDeleted": "类已删除",

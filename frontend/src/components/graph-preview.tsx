@@ -4,6 +4,7 @@
 import { useEffect, useRef, useCallback, useState } from 'react'
 import cytoscape, { Core, NodeSingular } from 'cytoscape'
 import { X, ZoomIn, ZoomOut, Maximize2, RotateCcw, Play, Pause, Network } from 'lucide-react'
+import { useTranslations } from 'next-intl'
 
 interface GraphNode {
   id: string
@@ -48,6 +49,7 @@ const getNodeColor = (type: string): string => {
 }
 
 export function GraphPreview({ data }: { data: GraphData | null }) {
+  const t = useTranslations('components.graphPreview')
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
   const layoutRef = useRef<any>(null)
@@ -212,13 +214,13 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
         if (edgeData.source === nodeData.id) {
           connections.push({
             direction: 'out',
-            label: edgeData.label || '关联',
+            label: edgeData.label || t('type'),
             node: edgeData.target
           })
         } else {
           connections.push({
             direction: 'in',
-            label: edgeData.label || '关联',
+            label: edgeData.label || t('type'),
             node: edgeData.source
           })
         }
@@ -304,7 +306,7 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
               onClick={toggleAnimation}
               className={`p-2 rounded-lg transition-colors ${isAnimating ? 'bg-primary hover:opacity-90' : 'bg-slate-100 hover:bg-slate-200'
                 }`}
-              title={isAnimating ? '暂停动画' : '启动动画'}
+              title={isAnimating ? t('pauseLabel') : t('startLabel')}
             >
               {isAnimating ? (
                 <Pause className="h-4 w-4 text-white" />
@@ -315,28 +317,28 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
             <button
               onClick={handleZoomIn}
               className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="放大"
+              title={t('zoomIn')}
             >
               <ZoomIn className="h-4 w-4 text-slate-600" />
             </button>
             <button
               onClick={handleZoomOut}
               className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="缩小"
+              title={t('zoomOut')}
             >
               <ZoomOut className="h-4 w-4 text-slate-600" />
             </button>
             <button
               onClick={handleFit}
               className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="适应屏幕"
+              title={t('fit')}
             >
               <Maximize2 className="h-4 w-4 text-slate-600" />
             </button>
             <button
               onClick={handleReset}
               className="p-2 bg-slate-100 hover:bg-slate-200 rounded-lg transition-colors"
-              title="重新布局"
+              title={t('reset')}
             >
               <RotateCcw className="h-4 w-4 text-slate-600" />
             </button>
@@ -358,8 +360,8 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
           {/* Stats */}
           <div className="absolute top-4 left-4 px-3 py-1.5 bg-white border border-slate-200 rounded-lg shadow-sm">
             <div className="text-[10px] text-slate-500 font-medium uppercase tracking-wider">
-              <span className="text-primary font-bold">{data!.nodes.length}</span> 节点 ·
-              <span className="text-primary font-bold ml-1">{data!.edges.length}</span> 关系
+              <span className="text-primary font-bold">{data!.nodes.length}</span> {t('nodes')} ·
+              <span className="text-primary font-bold ml-1">{data!.edges.length}</span> {t('edges')}
             </div>
           </div>
 
@@ -384,13 +386,13 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
 
               <div className="p-3 space-y-3">
                 <div>
-                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">类型</div>
+                  <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t('type')}</div>
                   <div className="text-sm font-medium text-slate-700">{selectedNode.type}</div>
                 </div>
 
                 {Object.entries(selectedNode.properties).filter(([k]) => k !== 'name' && k !== 'type').length > 0 && (
                   <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">属性</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-1">{t('properties')}</div>
                     <div className="space-y-1 bg-slate-50 p-2 rounded-lg border border-slate-100 max-h-40 overflow-y-auto">
                       {Object.entries(selectedNode.properties)
                         .filter(([k]) => k !== 'name' && k !== 'type')
@@ -406,7 +408,7 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
 
                 {selectedNode.connections.length > 0 && (
                   <div>
-                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">关系 ({selectedNode.connections.length})</div>
+                    <div className="text-[10px] font-bold text-slate-400 uppercase tracking-widest mb-2">{t('relationships')} ({selectedNode.connections.length})</div>
                     <div className="space-y-1.5 max-h-32 overflow-y-auto">
                       {selectedNode.connections.map((conn, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs">
@@ -432,7 +434,7 @@ export function GraphPreview({ data }: { data: GraphData | null }) {
           <div className="p-4 rounded-full bg-slate-50 mb-4 border border-slate-100">
             <Network className="h-8 w-8 text-primary/40" />
           </div>
-          <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">提问后将在此显示知识图谱</p>
+          <p className="text-slate-400 text-sm font-medium uppercase tracking-wider">{t('emptyMsg')}</p>
         </div>
       )}
     </div>

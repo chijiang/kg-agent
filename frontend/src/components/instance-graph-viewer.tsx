@@ -8,6 +8,7 @@ import { useAuthStore } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { ZoomIn, ZoomOut, Maximize2, Link as LinkIcon, Info } from 'lucide-react'
 import { SearchParams } from './instance-filter'
+import { useTranslations } from 'next-intl'
 
 // Neo4j-style color palette for different node labels
 const NEO4J_COLORS = [
@@ -50,6 +51,7 @@ interface InstanceGraphViewerProps {
 }
 
 export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger }: InstanceGraphViewerProps) {
+    const t = useTranslations('components.instanceGraph')
     const token = useAuthStore((state) => state.token)
     const containerRef = useRef<HTMLDivElement>(null)
     const cyRef = useRef<Core | null>(null)
@@ -173,12 +175,93 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
         }
     }, [])
 
+    // 为初始展示加载随机数据
+    useEffect(() => {
+        if (!searchParams && token && cyRef.current) {
+            loadRandomGraph()
+        }
+    }, [searchParams, token, refreshTrigger])
+
     // 当搜索参数变化时加载数据
     useEffect(() => {
         if (searchParams && token && cyRef.current) {
             loadInstances()
         }
     }, [searchParams, token, refreshTrigger])
+
+    const loadRandomGraph = async () => {
+        if (!cyRef.current || !isMounted) return
+        setLoading(true)
+        setNoData(false)
+
+        try {
+            const res = await graphApi.getRandomInstances(200)
+            const { nodes, relationships } = res.data
+
+            if (nodes.length === 0) {
+                setNoData(true)
+                cyRef.current.json({ elements: [] })
+                return
+            }
+
+            const elements: ElementDefinition[] = []
+
+            // 添加节点
+            nodes.forEach((n: any) => {
+                const color = getColorForLabel(n.nodeLabel)
+                elements.push({
+                    data: {
+                        id: n.id,
+                        label: n.name,
+                        nodeLabel: n.nodeLabel,
+                        labels: n.labels,
+                        color: color,
+                        borderColor: shadeColor(color, -20),
+                        properties: n.properties,
+                    },
+                })
+            })
+
+            // 添加关系
+            const nodeIds = new Set(nodes.map((n: any) => n.id.toString()))
+            relationships.forEach((rel: any) => {
+                // 防御性过滤：如果 source 或 target 不在当前节点列表中，跳过（避免 Cytoscape 报错）
+                const sourceId = rel.source?.toString()
+                const targetId = rel.target?.toString()
+
+                if (nodeIds.has(sourceId) && nodeIds.has(targetId)) {
+                    elements.push({
+                        data: {
+                            id: rel.id ? `rel-${rel.id}` : `${sourceId}-${targetId}-${rel.type}`,
+                            source: sourceId,
+                            target: targetId,
+                            label: rel.type,
+                        },
+                    })
+                } else {
+                    console.warn(`Skipping relationship ${rel.id} due to missing node: source=${sourceId}, target=${targetId}`)
+                }
+            })
+
+            if (!cyRef.current || !isMounted) return
+
+            cyRef.current.json({ elements })
+            cyRef.current.layout({
+                name: 'cose',
+                animate: true,
+                animationDuration: 500,
+                nodeRepulsion: () => 10000,
+                idealEdgeLength: () => 150,
+                gravity: 0.15,
+            }).run()
+
+        } catch (err) {
+            console.error('Failed to load random graph:', err)
+            setNoData(true)
+        } finally {
+            setLoading(false)
+        }
+    }
 
     const loadInstances = async () => {
         if (!cyRef.current || !isMounted || !searchParams) return
@@ -402,7 +485,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
             {/* 标题 */}
             <div className="absolute top-4 right-4 z-10 bg-white border border-slate-200 px-3 py-1.5 rounded-lg shadow-sm flex items-center gap-2 text-xs font-bold text-slate-700 uppercase tracking-widest">
                 <LinkIcon className="h-3 w-3 text-primary" />
-                实例图谱
+                {t('title')}
             </div>
 
             {/* 图例 */}
@@ -426,7 +509,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <div className="bg-white/90 px-6 py-4 rounded-lg shadow-lg text-center">
                         <p className="text-gray-500 text-sm">
-                            {searchParams ? '未找到匹配的实例' : '请选择筛选条件并点击查询'}
+                            {searchParams ? t('noResults') : t('selectFilters')}
                         </p>
                     </div>
                 </div>
@@ -437,7 +520,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
                 <div className="absolute inset-0 flex items-center justify-center bg-black/10">
                     <div className="bg-white px-6 py-4 rounded-lg shadow-lg flex items-center gap-3">
                         <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-blue-500" />
-                        <span className="text-gray-600">加载中...</span>
+                        <span className="text-gray-600">{t('loading')}</span>
                     </div>
                 </div>
             )}

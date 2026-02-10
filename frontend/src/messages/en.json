@@ -53,7 +53,8 @@
     "at": "at",
     "by": "by",
     "with": "with",
-    "as": "as"
+    "as": "as",
+    "preview": "Preview"
   },
   "auth": {
     "login": "Login",
@@ -421,14 +422,23 @@
     "transformNone": "None",
     "transformParseNum": "Parse Number",
     "transformToString": "To String",
-    "transformToDate": "To Date"
+    "transformToDate": "To Date",
+    "reservedKeywordWarningTitle": "Reserved Keyword Warning",
+    "reservedKeywordWarningDesc": "Property name \"{prop}\" is a system reserved field. Mapping to this field may cause data conflicts or sync failures. Suggested to use another name (e.g. \"source_id\").",
+    "reservedKeywordConfirm": "Warning: Property name \"{prop}\" is a system reserved keyword. Using it directly may cause unpredictable conflicts. Are you sure you want to continue?"
   },
   "components": {
     "chat": {
       "placeholder": "Enter your question...",
       "send": "Send",
       "thinking": "Thinking Process",
-      "error": "Sorry, an error occurred"
+      "error": "Sorry, an error occurred",
+      "startExploring": "Start Exploring Knowledge Graph",
+      "tryQuestions": "Try the following questions:",
+      "previewUpdated": "Preview graph updated",
+      "exampleQ1": "Which supplier did PO_2024_001 order from?",
+      "exampleQ2": "What are the related entities for the purchase order?",
+      "exampleQ3": "What is the relationship between payment and order?"
     },
     "conversation": {
       "newChat": "New Chat",
@@ -479,6 +489,31 @@
       "checkConfig": "Please check configuration",
       "confirmUnbindRelationship": "Are you sure you want to unbind this relationship?",
       "relationshipUnbindSuccess": "Relationship binding removed"
+    },
+    "graphPreview": {
+      "pauseLabel": "Pause Animation",
+      "startLabel": "Start Animation",
+      "zoomIn": "Zoom In",
+      "zoomOut": "Zoom Out",
+      "fit": "Fit View",
+      "reset": "Relayout",
+      "nodeDetails": "Node Details",
+      "type": "Type",
+      "properties": "Properties",
+      "relationships": "Relationships",
+      "nodes": "nodes",
+      "edges": "relationships",
+      "emptyMsg": "Knowledge graph will be shown here after you ask a question"
+    },
+    "instanceGraph": {
+      "title": "Instance Graph",
+      "noResults": "No matching instances found",
+      "selectFilters": "Please select filters and click search",
+      "loading": "Loading..."
+    },
+    "schemaViewer": {
+      "centerGraph": "Center Graph",
+      "loadFailed": "Failed to load Schema"
     },
     "ontology": {
       "classDeleted": "Class deleted",

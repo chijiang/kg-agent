@@ -163,9 +163,9 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
   }
 
   const exampleQuestions = [
-    "PO_2024_001 是向哪个供应商订购的？",
-    "采购订单有哪些相关实体？",
-    "付款和订单之间有什么关系？"
+    t('exampleQ1'),
+    t('exampleQ2'),
+    t('exampleQ3')
   ]
 
   return (
@@ -176,8 +176,8 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
             <div className="p-4 rounded-full bg-primary/10 mb-4">
               <Sparkles className="h-8 w-8 text-primary" />
             </div>
-            <h3 className="text-lg font-medium text-slate-700 mb-2">开始探索知识图谱</h3>
-            <p className="text-sm text-slate-500 mb-6">尝试以下问题：</p>
+            <h3 className="text-lg font-medium text-slate-700 mb-2">{t('startExploring')}</h3>
+            <p className="text-sm text-slate-500 mb-6">{t('tryQuestions')}</p>
             <div className="space-y-2 w-full max-w-md">
               {exampleQuestions.map((q, i) => (
                 <button
@@ -250,7 +250,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
               {msg.graphData && (
                 <div className="flex items-center gap-1.5 mt-2 px-2.5 py-1 bg-primary/10 text-primary border border-primary/20 rounded-full text-xs w-fit font-medium">
                   <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse" />
-                  预览图谱已更新
+                  {t('previewUpdated')}
                 </div>
               )}
             </div>

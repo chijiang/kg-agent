@@ -117,19 +117,28 @@ export default function InstancesPage() {
     return (
         <AppLayout>
             <div className="h-[calc(100vh-120px)] flex flex-col gap-4">
-                {/* Filter and sync button area */}
-                <div className="flex flex-col md:flex-row gap-4 items-start">
-                    <div className="flex-1 w-full">
-                        <InstanceFilter onSearch={handleSearch} loading={loading} />
+                {/* Header and Filter area */}
+                <div className="flex flex-col gap-3">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <h1 className="text-xl font-bold text-slate-800">{t('graph.instances.title')}</h1>
+                            <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-primary/10 text-primary uppercase tracking-wider">
+                                {t('common.preview')}
+                            </span>
+                        </div>
+                        <Button
+                            onClick={handleSyncAll}
+                            disabled={syncing}
+                            variant="outline"
+                            size="sm"
+                            className="h-8 border-primary/30 text-primary hover:bg-primary/5 shadow-sm"
+                        >
+                            <RefreshCw className={`mr-2 h-3.5 w-3.5 ${syncing ? 'animate-spin' : ''}`} />
+                            {syncing ? t('graph.instances.syncing') : t('graph.instances.oneClickSync')}
+                        </Button>
                     </div>
-                    <Button
-                        onClick={handleSyncAll}
-                        disabled={syncing}
-                        className="w-full md:w-auto shrink-0 bg-primary hover:opacity-90 text-white shadow-sm"
-                    >
-                        <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
-                        {syncing ? t('graph.instances.syncing') : t('graph.instances.oneClickSync')}
-                    </Button>
+
+                    <InstanceFilter onSearch={handleSearch} loading={loading} />
                 </div>
 
                 {/* Graph and details area */}
