@@ -69,13 +69,12 @@
     "hasAccount": "已有账号？"
   },
   "nav": {
-    "qa": "问答",
-    "importGraph": "导入图谱",
-    "ontology": "本体查看",
-    "binding": "数据绑定",
+    "qa": "智能问答",
+    "importGraph": "图谱导入",
+    "ontology": "本体管理",
     "instances": "实例图谱",
     "dataProducts": "数据产品",
-    "rules": "业务逻辑管理器",
+    "rules": "业务规则",
     "config": "系统配置"
   },
   "layout": {
@@ -114,8 +113,9 @@
       "relationships": "个关系"
     },
     "ontology": {
-      "title": "本体结构",
+      "title": "本体管理",
       "structure": "本体结构",
+      "dataMapping": "数据映射",
       "addClass": "添加类",
       "addRelationship": "添加关系",
       "editMode": "编辑",

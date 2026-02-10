@@ -40,7 +40,7 @@ import { Separator } from '@/components/ui/separator'
 import { Badge } from '@/components/ui/badge'
 import { useTranslations } from 'next-intl'
 
-import { Selection } from '@/app/[locale]/graph/binding/page'
+import { Selection, OntologyNode } from '@/types/ontology'
 
 interface BindingDetailPanelProps {
     selection: Selection | null

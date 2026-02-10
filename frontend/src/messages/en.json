@@ -69,17 +69,16 @@
     "hasAccount": "Already have an account?"
   },
   "nav": {
-    "qa": "Q&A",
+    "qa": "Intelligent Q&A",
     "importGraph": "Import Graph",
-    "ontology": "Ontology",
-    "binding": "Data Binding",
+    "ontology": "Ontology Management",
     "instances": "Instance Graph",
     "dataProducts": "Data Products",
-    "rules": "Rule Engine",
+    "rules": "Business Rules",
     "config": "Settings"
   },
   "layout": {
-    "title": "Enterprise Ontology Management Platform",
+    "title": "Enterprise Ontology Platform",
     "welcomeUser": "Welcome, {username}",
     "showSidebar": "Show sidebar"
   },
@@ -114,8 +113,9 @@
       "relationships": "relationships"
     },
     "ontology": {
-      "title": "Ontology Structure",
+      "title": "Ontology Management",
       "structure": "Ontology Structure",
+      "dataMapping": "Data Mapping",
       "addClass": "Add Class",
       "addRelationship": "Add Relationship",
       "editMode": "Edit",

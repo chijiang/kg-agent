@@ -1,4 +1,4 @@
-// frontend/src/app/graph/ontology/page.tsx
+// frontend/src/app/graph/management/page.tsx
 'use client'
 
 import { useState, useEffect } from 'react'
@@ -7,9 +7,10 @@ import { useTranslations } from 'next-intl'
 import { AppLayout } from '@/components/layout'
 import { SchemaViewer } from '@/components/schema-viewer'
 import { OntologyDetailPanel } from '@/components/ontology-detail-panel'
+import { BindingDetailPanel } from '@/components/binding-detail-panel'
 import { useAuthStore } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
-import { Download, Loader2, Edit3, Eye, Plus, Info, ArrowRight } from 'lucide-react'
+import { Download, Loader2, Edit3, Eye, Plus, Info, ArrowRight, Link as LinkIcon, Crosshair } from 'lucide-react'
 import { toast } from 'sonner'
 import {
     Dialog,
@@ -22,18 +23,9 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { graphApi } from '@/lib/api'
 
-export interface OntologyNode {
-    name: string
-    label?: string[] | string
-    dataProperties?: string[]
-    color?: string
-}
+import { Selection, OntologyNode } from '@/types/ontology'
 
-export type Selection =
-    | { type: 'node'; data: OntologyNode }
-    | { type: 'edge'; data: { source: string; target: string; relationship_type: string } }
-
-export default function OntologyPage() {
+export default function OntologyManagementPage() {
     const router = useRouter()
     const t = useTranslations()
     const token = useAuthStore((state) => state.token)
@@ -41,6 +33,7 @@ export default function OntologyPage() {
     const [selection, setSelection] = useState<Selection | null>(null)
     const [isExporting, setIsExporting] = useState(false)
     const [isEditMode, setIsEditMode] = useState(false)
+    const [isMappingMode, setIsMappingMode] = useState(false)
     const [refreshKey, setRefreshKey] = useState(0)
 
     // Add Class Modal State
@@ -147,6 +140,22 @@ export default function OntologyPage() {
         toast(t('graph.ontology.creationCancelled'))
     }
 
+    const toggleEditMode = () => {
+        setIsEditMode(!isEditMode)
+        if (!isEditMode) {
+            setIsMappingMode(false)
+        }
+        setRelStep('IDLE')
+    }
+
+    const toggleMappingMode = () => {
+        setIsMappingMode(!isMappingMode)
+        if (!isMappingMode) {
+            setIsEditMode(false)
+            setRelStep('IDLE')
+        }
+    }
+
     return (
         <AppLayout>
             <div className="flex flex-col h-[calc(100vh-120px)] gap-3">
@@ -162,6 +171,12 @@ export default function OntologyPage() {
                                     {relStep === 'TYPE' && t('graph.ontology.stepType')}
                                 </span>
                                 <button onClick={cancelRelCreation} className="ml-1 text-blue-500 hover:text-blue-700 text-xs underline">{t('common.cancel')}</button>
+                            </div>
+                        )}
+                        {isMappingMode && (
+                            <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
+                                <Info className="w-3 h-3" />
+                                <span>{t('graph.binding.info')}</span>
                             </div>
                         )}
                     </div>
@@ -191,14 +206,20 @@ export default function OntologyPage() {
                         <Button
                             size="sm"
                             variant={isEditMode ? "default" : "outline"}
-                            onClick={() => {
-                                setIsEditMode(!isEditMode)
-                                setRelStep('IDLE')
-                            }}
+                            onClick={toggleEditMode}
                             className={`h-7 text-xs ${isEditMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
                         >
                             {isEditMode ? <Eye className="w-3 h-3 mr-1" /> : <Edit3 className="w-3 h-3 mr-1" />}
                             {isEditMode ? t('graph.ontology.exitEditMode') : t('graph.ontology.editMode')}
+                        </Button>
+                        <Button
+                            size="sm"
+                            variant={isMappingMode ? "default" : "outline"}
+                            onClick={toggleMappingMode}
+                            className={`h-7 text-xs ${isMappingMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
+                        >
+                            <LinkIcon className="w-3 h-3 mr-1" />
+                            {isMappingMode ? t('common.exit') : t('graph.ontology.dataMapping')}
                         </Button>
                         <Button
                             size="sm"
@@ -222,7 +243,7 @@ export default function OntologyPage() {
                         <div className={`bg-white rounded-lg border border-slate-200 overflow-hidden ${selection ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
                             <SchemaViewer
                                 key={refreshKey}
-                                isEditMode={isEditMode}
+                                isEditMode={isEditMode && !isMappingMode}
                                 activeStep={relStep}
                                 sourceNode={relSource}
                                 onNodeSelect={(node) => {
@@ -242,7 +263,7 @@ export default function OntologyPage() {
                                             setRelStep('TYPE')
                                         }
                                     } else {
-                                        setSelection(node ? { type: 'node', data: node } : null)
+                                        setSelection(node ? { type: 'node', data: node as OntologyNode } : null)
                                     }
                                 }}
                                 onEdgeSelect={(edge) => {
@@ -256,13 +277,21 @@ export default function OntologyPage() {
 
                         {/* Right: Detail Panel */}
                         {selection && (
-                            <div className="lg:col-span-1">
-                                <OntologyDetailPanel
-                                    selection={selection}
-                                    isEditMode={isEditMode}
-                                    onClose={() => setSelection(null)}
-                                    onUpdate={() => setRefreshKey(prev => prev + 1)}
-                                />
+                            <div className="lg:col-span-1 border-l pl-1 h-full overflow-hidden">
+                                {isMappingMode ? (
+                                    <BindingDetailPanel
+                                        selection={selection}
+                                        onUpdate={() => setRefreshKey(prev => prev + 1)}
+                                        onClose={() => setSelection(null)}
+                                    />
+                                ) : (
+                                    <OntologyDetailPanel
+                                        selection={selection}
+                                        isEditMode={isEditMode}
+                                        onClose={() => setSelection(null)}
+                                        onUpdate={() => setRefreshKey(prev => prev + 1)}
+                                    />
+                                )}
                             </div>
                         )}
                     </div>

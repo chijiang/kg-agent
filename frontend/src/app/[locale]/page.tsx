@@ -1,7 +1,6 @@
-// frontend/src/app/page.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations, useLocale } from 'next-intl'
 import { Button } from '@/components/ui/button'
@@ -16,13 +15,19 @@ export default function LoginPage() {
   const router = useRouter()
   const locale = useLocale()
   const t = useTranslations()
-  const setAuth = useAuthStore((state) => state.setAuth)
+  const { user, token, setAuth } = useAuthStore()
   const [isLogin, setIsLogin] = useState(true)
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
+
+  useEffect(() => {
+    if (token) {
+      router.replace(`/${locale}/dashboard`)
+    }
+  }, [token, locale, router])
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

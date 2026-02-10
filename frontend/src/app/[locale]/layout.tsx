@@ -4,6 +4,7 @@ import { notFound } from 'next/navigation';
 import { locales } from '@/i18n';
 import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from 'sonner';
+import "../globals.css";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
