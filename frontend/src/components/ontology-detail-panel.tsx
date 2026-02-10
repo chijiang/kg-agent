@@ -45,7 +45,7 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
     const [relationships, setRelationships] = useState<Relationship[]>([])
     const [actions, setActions] = useState<ActionInfo[]>([])
     const [loading, setLoading] = useState(false)
-    const [editingLabel, setEditingLabel] = useState('')
+    const [editingLabels, setEditingLabels] = useState<string[]>([])
     const [editingProperties, setEditingProperties] = useState<string[]>([])
     const [editingColor, setEditingColor] = useState<string>('')
     const [isSaving, setIsSaving] = useState(false)
@@ -71,7 +71,8 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
         setShowColorPicker(false)
         if (node && token) {
             loadDetails()
-            setEditingLabel(node.label || node.name)
+            const labels = node.label ? (Array.isArray(node.label) ? node.label : [node.label]) : []
+            setEditingLabels(labels.length > 0 ? labels : [node.name])
             setEditingProperties(node.dataProperties || [])
             setEditingColor(node.color || '#6366f1')
         } else if (edge) {
@@ -107,6 +108,15 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
             })
             setRelationships(rels)
 
+            // Refresh local state with latest data from schema
+            const currentClass = schemaRes.data.nodes.find((n: any) => n.name === node.name)
+            if (currentClass) {
+                const labels = currentClass.label ? (Array.isArray(currentClass.label) ? currentClass.label : [currentClass.label]) : []
+                setEditingLabels(labels.length > 0 ? labels : [node.name])
+                setEditingProperties(currentClass.dataProperties || [])
+                setEditingColor(currentClass.color || '#6366f1')
+            }
+
             try {
                 const actionsRes = await actionsApi.list()
                 const relatedActions = actionsRes.data.actions?.filter(
@@ -128,8 +138,9 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
         if (!node) return
         setIsSaving(true)
         try {
-            await graphApi.updateClass(node.name, editingLabel, editingProperties, editingColor)
+            await graphApi.updateClass(node.name, editingLabels.filter(l => l.trim() !== '').join(','), editingProperties, editingColor)
             toast.success('更新成功')
+            await loadDetails() // Refresh local state after successful save
             onUpdate?.()
         } catch (err: any) {
             toast.error(`更新失败: ${err.response?.data?.detail || err.message}`)
@@ -297,20 +308,45 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                     </div>
                     <div className="flex-1 min-w-0">
                         {isEditMode ? (
-                            <div className="flex flex-col gap-0.5">
-                                <span className="text-[10px] text-slate-400">{node.name}</span>
-                                <Input
-                                    value={editingLabel}
-                                    onChange={(e) => setEditingLabel(e.target.value)}
-                                    className="h-6 text-xs py-0 bg-white"
-                                    placeholder="标签"
-                                />
+                            <div className="flex flex-col gap-1.5">
+                                <span className="text-[10px] text-slate-400">{node.name} (别名)</span>
+                                {editingLabels.map((l, idx) => (
+                                    <div key={idx} className="flex gap-1 items-center">
+                                        <Input
+                                            value={l}
+                                            onChange={(e) => {
+                                                const newLabels = [...editingLabels]
+                                                newLabels[idx] = e.target.value
+                                                setEditingLabels(newLabels)
+                                            }}
+                                            className="h-6 text-xs py-0 bg-white"
+                                            placeholder="标签"
+                                        />
+                                        {editingLabels.length > 1 && (
+                                            <button onClick={() => setEditingLabels(editingLabels.filter((_, i) => i !== idx))} className="text-red-400">
+                                                <X className="h-3 w-3" />
+                                            </button>
+                                        )}
+                                    </div>
+                                ))}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 text-[9px] w-fit px-1 text-blue-500"
+                                    onClick={() => setEditingLabels([...editingLabels, ''])}
+                                >
+                                    <Plus className="h-2 w-2 mr-1" /> 添加别名
+                                </Button>
                             </div>
                         ) : (
                             <>
                                 <h3 className="text-sm font-medium text-slate-700 truncate">{node.name}</h3>
-                                {node.label && node.label !== node.name && (
-                                    <p className="text-[10px] text-slate-400">{node.label}</p>
+                                {editingLabels.length > 0 && (
+                                    <div className="flex flex-wrap gap-1 mt-0.5">
+                                        {editingLabels.filter(l => l !== node.name).map((l, i) => (
+                                            <span key={i} className="text-[9px] bg-slate-100 text-slate-500 px-1 rounded">{l}</span>
+                                        ))}
+                                    </div>
                                 )}
                             </>
                         )}
@@ -490,6 +526,9 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                                             <div className="flex items-center gap-1.5">
                                                 <Zap className="h-3 w-3 text-purple-500" />
                                                 <span className="font-medium text-slate-600">{action.name}</span>
+                                                {(action as any).has_call && (
+                                                    <span className="px-1 py-0.5 rounded text-[8px] bg-blue-100 text-blue-600 font-medium">gRPC</span>
+                                                )}
                                             </div>
                                             <span className={`px-1.5 py-0.5 rounded text-[10px] ${action.is_active ? 'bg-green-100 text-green-600' : 'bg-slate-100 text-slate-400'}`}>
                                                 {action.is_active ? '启用' : '禁用'}
