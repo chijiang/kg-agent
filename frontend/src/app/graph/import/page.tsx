@@ -98,7 +98,7 @@ export default function ImportPage() {
                 id="file-upload"
               />
               <label htmlFor="file-upload" className="cursor-pointer">
-                <span className="text-blue-600 hover:underline">
+                <span className="text-primary hover:underline">
                   点击选择文件
                 </span>
                 <span className="text-gray-400 ml-2">或拖拽文件到此处</span>
@@ -108,7 +108,7 @@ export default function ImportPage() {
               )}
             </div>
 
-            <Button onClick={handleImport} disabled={!file || loading} className="w-full">
+            <Button onClick={handleImport} disabled={!file || loading} className="w-full bg-primary hover:opacity-90">
               {loading ? '处理中...' : '开始导入'}
             </Button>
 
@@ -162,13 +162,13 @@ export default function ImportPage() {
             </Dialog>
 
             {result && (
-              <div className="mt-4 p-4 bg-green-50 rounded-lg">
-                <h3 className="font-semibold text-green-800">导入成功！</h3>
-                <p className="text-sm text-green-700">
+              <div className="mt-4 p-4 bg-primary/5 border border-primary/20 rounded-lg">
+                <h3 className="font-semibold text-primary">导入成功！</h3>
+                <p className="text-sm text-slate-700">
                   Schema: {result.schema_stats.classes} 个类,
                   {result.schema_stats.properties} 个属性
                 </p>
-                <p className="text-sm text-green-700">
+                <p className="text-sm text-slate-700">
                   Instance: {result.instance_stats.nodes} 个节点,
                   {result.instance_stats.relationships} 个关系
                 </p>

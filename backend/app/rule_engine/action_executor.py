@@ -289,6 +289,16 @@ class ActionExecutor:
             product = result.scalar_one_or_none()
 
         if not product:
+            # Try name match for better UX in Business Editor
+            result = await session.execute(
+                select(DataProduct).where(
+                    DataProduct.name == statement.service_name,
+                    DataProduct.is_active == True,
+                )
+            )
+            product = result.scalar_one_or_none()
+
+        if not product:
             raise ValueError(
                 f"Data product with service '{statement.service_name}' not found"
             )
@@ -297,11 +307,6 @@ class ActionExecutor:
         request_data = {}
         for field_name, expr in statement.arguments.items():
             request_data[field_name] = await evaluator.evaluate(expr)
-
-        logger.info(
-            f"CALL {statement.service_name}.{statement.method_name} "
-            f"with args: {request_data}"
-        )
 
         # 3. Call gRPC method
         async with DynamicGrpcClient(product.grpc_host, product.grpc_port) as client:

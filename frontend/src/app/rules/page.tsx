@@ -55,11 +55,11 @@ function RuleCard({
     onDelete: () => void
 }) {
     return (
-        <Card className="group hover:shadow-lg transition-all duration-200 border-slate-200 hover:border-indigo-300">
+        <Card className="group hover:shadow-lg transition-all duration-200 border-slate-200 hover:border-primary/30">
             <CardHeader className="pb-3">
                 <div className="flex items-start justify-between">
                     <div className="flex items-center gap-2">
-                        <div className="p-2 rounded-lg bg-gradient-to-br from-indigo-500 to-purple-600">
+                        <div className="p-2 rounded-lg bg-primary">
                             <Zap className="h-4 w-4 text-white" />
                         </div>
                         <div>
@@ -76,7 +76,7 @@ function RuleCard({
                             variant="ghost"
                             size="sm"
                             onClick={onEdit}
-                            className="h-8 w-8 p-0 text-slate-500 hover:text-indigo-600"
+                            className="h-8 w-8 p-0 text-slate-500 hover:text-primary"
                         >
                             <Edit className="h-4 w-4" />
                         </Button>
@@ -96,7 +96,7 @@ function RuleCard({
                     <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
                         ON {rule.trigger.type}
                     </span>
-                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-100 text-emerald-800">
+                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
                         {rule.trigger.entity}
                         {rule.trigger.property && `.${rule.trigger.property}`}
                     </span>
@@ -212,7 +212,7 @@ function DslEditor({
                     placeholder={placeholder}
                     className={`w-full h-96 p-4 font-mono text-sm rounded-lg border ${error
                         ? 'border-red-300 focus:border-red-500 focus:ring-red-500'
-                        : 'border-slate-300 focus:border-indigo-500 focus:ring-indigo-500'
+                        : 'border-slate-300 focus:border-primary focus:ring-primary'
                         } focus:ring-2 focus:ring-opacity-50 resize-none bg-slate-50`}
                     style={{ lineHeight: '1.6' }}
                 />
@@ -351,7 +351,7 @@ RULE NewRule PRIORITY 100 {
             <DialogContent className="sm:max-w-6xl max-h-[95vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
-                        <Zap className="h-5 w-5 text-indigo-600" />
+                        <Zap className="h-5 w-5 text-primary" />
                         {rule ? '编辑规则' : '创建规则'}
                     </DialogTitle>
                     <DialogDescription>
@@ -392,7 +392,7 @@ RULE NewRule PRIORITY 100 {
                             id="isActive"
                             checked={isActive}
                             onChange={(e) => setIsActive(e.target.checked)}
-                            className="h-4 w-4 rounded border-slate-300 text-indigo-600 focus:ring-indigo-500"
+                            className="h-4 w-4 rounded border-slate-300 text-primary focus:ring-primary"
                         />
                         <label htmlFor="isActive" className="text-sm text-slate-700">
                             激活规则
@@ -747,7 +747,7 @@ ACTION Entity.submit {
                     <div className="space-y-3 p-4 bg-slate-50 rounded-lg border border-slate-200">
                         <div className="flex items-center justify-between">
                             <label className="text-sm font-semibold text-slate-700 flex items-center gap-2">
-                                <Layers className="h-4 w-4 text-indigo-500" />
+                                <Layers className="h-4 w-4 text-primary" />
                                 动作参数配置
                             </label>
                             <Button
@@ -913,7 +913,7 @@ ACTION Entity.submit {
                     <Button
                         onClick={handleSave}
                         disabled={saving}
-                        className="bg-emerald-600 hover:bg-emerald-700"
+                        className="bg-primary hover:opacity-90 transition-opacity"
                     >
                         {saving ? (
                             <>
@@ -1166,7 +1166,7 @@ export default function RulesPage() {
                                     setEditingAction(null)
                                     setActionEditorOpen(true)
                                 }}
-                                className="bg-emerald-600 hover:bg-emerald-700"
+                                className="bg-primary hover:opacity-90 transition-opacity"
                             >
                                 <Plus className="h-4 w-4 mr-2" />
                                 创建动作

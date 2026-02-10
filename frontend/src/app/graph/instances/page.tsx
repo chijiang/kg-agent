@@ -123,7 +123,7 @@ export default function InstancesPage() {
                     <Button
                         onClick={handleSyncAll}
                         disabled={syncing}
-                        className="w-full md:w-auto shrink-0 bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white shadow-md"
+                        className="w-full md:w-auto shrink-0 bg-primary hover:opacity-90 text-white shadow-sm"
                     >
                         <RefreshCw className={`mr-2 h-4 w-4 ${syncing ? 'animate-spin' : ''}`} />
                         {syncing ? '同步中...' : '一键同步'}

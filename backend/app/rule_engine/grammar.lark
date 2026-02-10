@@ -41,7 +41,7 @@ set_stmt: "SET" path EQ expression ";"
 
 trigger_stmt: "TRIGGER" entity_action "ON" CNAME ["WITH" object] ";"
 
-call_stmt: CALL CNAME "." CNAME "(" object ")" [INTO CNAME] ";"
+call_stmt: CALL (CNAME | STRING) "." CNAME "(" object ")" [INTO CNAME] ";"
 
 // Expressions
 expression: or_expr

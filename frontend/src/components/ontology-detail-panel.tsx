@@ -332,7 +332,7 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                                 <Button
                                     variant="ghost"
                                     size="sm"
-                                    className="h-5 text-[9px] w-fit px-1 text-blue-500"
+                                    className="h-5 text-[9px] w-fit px-1 text-primary"
                                     onClick={() => setEditingLabels([...editingLabels, ''])}
                                 >
                                     <Plus className="h-2 w-2 mr-1" /> 添加别名
@@ -405,17 +405,17 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                         {/* Properties */}
                         <section>
                             <h4 className="text-[10px] font-medium text-slate-400 uppercase tracking-wide mb-2 flex items-center gap-1.5">
-                                <span className="w-1.5 h-1.5 rounded-full bg-blue-500" />
+                                <span className="w-1.5 h-1.5 rounded-full bg-primary" />
                                 属性
                                 {isEditMode && !isAddingProp && (
-                                    <button onClick={() => setIsAddingProp(true)} className="ml-auto text-blue-500 hover:text-blue-600">
+                                    <button onClick={() => setIsAddingProp(true)} className="ml-auto text-primary hover:opacity-80">
                                         <Plus className="h-3 w-3" />
                                     </button>
                                 )}
                             </h4>
 
                             {isEditMode && isAddingProp && (
-                                <div className="flex flex-col gap-2 mb-2 bg-blue-50 p-2 rounded border border-blue-100">
+                                <div className="flex flex-col gap-2 mb-2 bg-primary/5 p-2 rounded border border-primary/10">
                                     <div className="flex gap-1.5">
                                         <Input
                                             placeholder="属性名, 如: status"
@@ -486,15 +486,15 @@ export function OntologyDetailPanel({ selection, isEditMode, onUpdate, onClose }
                                             key={i}
                                             className="flex items-center gap-1 px-2 py-1 bg-slate-50 rounded text-[11px] border border-slate-100"
                                         >
-                                            <span className={`truncate ${rel.direction === 'outgoing' ? 'text-blue-600 font-medium' : 'text-slate-500'}`}>
+                                            <span className={`truncate ${rel.direction === 'outgoing' ? 'text-primary font-medium' : 'text-slate-500'}`}>
                                                 {rel.source}
                                             </span>
                                             <ArrowRight className="h-2.5 w-2.5 flex-shrink-0 text-slate-300" />
-                                            <span className={`px-1 py-0.5 rounded text-[10px] ${rel.direction === 'outgoing' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'}`}>
+                                            <span className={`px-1 py-0.5 rounded text-[10px] ${rel.direction === 'outgoing' ? 'bg-primary/10 text-primary' : 'bg-slate-100 text-slate-600'}`}>
                                                 {rel.type}
                                             </span>
                                             <ArrowRight className="h-2.5 w-2.5 flex-shrink-0 text-slate-300" />
-                                            <span className={`truncate ${rel.direction === 'incoming' ? 'text-blue-600 font-medium' : 'text-slate-500'}`}>
+                                            <span className={`truncate ${rel.direction === 'incoming' ? 'text-primary font-medium' : 'text-slate-500'}`}>
                                                 {rel.target}
                                             </span>
                                             {isEditMode && (

@@ -48,7 +48,7 @@ export default function DataBindingPage() {
                 <div className="flex justify-between items-center">
                     <div className="flex items-center gap-3">
                         <h1 className="text-xl font-bold text-slate-800">数据绑定配置</h1>
-                        <div className="flex items-center gap-1.5 bg-blue-50 px-2.5 py-1 rounded-md border border-blue-200 text-blue-600 text-xs">
+                        <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
                             <Info className="w-3 h-3" />
                             <span>点击图中的节点或关系进行配置</span>
                         </div>
