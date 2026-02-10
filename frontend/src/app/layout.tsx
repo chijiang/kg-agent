@@ -23,14 +23,5 @@ export default function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  return (
-    <html lang="zh">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        {children}
-        <Toaster position="top-center" richColors />
-      </body>
-    </html>
-  );
+  return children;
 }
