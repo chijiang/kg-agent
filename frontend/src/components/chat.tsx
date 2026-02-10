@@ -236,7 +236,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
                 ) : (
-                  <div className="prose prose-sm max-w-none text-slate-700 prose-slate prose-headings:font-semibold prose-headings:text-slate-800 prose-p:leading-relaxed prose-li:my-1 prose-table:border prose-table:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1">
+                  <div className="prose max-w-none text-[13px] text-slate-700 prose-slate prose-headings:font-semibold prose-headings:text-slate-800 prose-p:leading-relaxed prose-li:my-1 prose-table:border prose-table:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.content || '...'}
                     </ReactMarkdown>

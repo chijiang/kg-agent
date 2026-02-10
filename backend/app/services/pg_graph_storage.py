@@ -157,7 +157,7 @@ class PGGraphStorage:
         """获取所有类定义"""
         result = await self.db.execute(select(SchemaClass))
         classes = result.scalars().all()
-        return [
+        classes_data = [
             {
                 "name": c.name,
                 "label": (
@@ -170,6 +170,21 @@ class PGGraphStorage:
             }
             for c in classes
         ]
+
+        # 触发图谱预览事件
+        viz_nodes = [
+            {
+                "id": c["name"],
+                "label": c["name"],
+                "type": c["name"],  # 使用类名作为类型，方便着色
+                "properties": {"attributes": c["dataProperties"]},
+            }
+            for c in classes_data
+        ]
+        if viz_nodes:
+            await self._emit_graph_view_event(nodes=viz_nodes, edges=[])
+
+        return classes_data
 
     async def get_ontology_relationships(self) -> List[Dict]:
         """获取所有关系定义"""
@@ -189,7 +204,7 @@ class PGGraphStorage:
             .options(selectinload(SchemaRelationship.target_class))
         )
         rels = result.scalars().all()
-        return [
+        rels_data = [
             {
                 "source": r.source_class.name,
                 "type": r.relationship_type,
@@ -197,6 +212,26 @@ class PGGraphStorage:
             }
             for r in rels
         ]
+
+        # 触发图谱预览事件
+        viz_nodes_set = set()
+        viz_edges = []
+        for r in rels_data:
+            viz_nodes_set.add(r["source"])
+            viz_nodes_set.add(r["target"])
+            viz_edges.append(
+                {"source": r["source"], "target": r["target"], "label": r["type"]}
+            )
+
+        viz_nodes = [
+            {"id": node_name, "label": node_name, "type": node_name, "properties": {}}
+            for node_name in viz_nodes_set
+        ]
+
+        if viz_nodes:
+            await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
+
+        return rels_data
 
     async def describe_class(self, class_name: str) -> Dict:
         """描述一个类的定义"""
@@ -227,8 +262,6 @@ class PGGraphStorage:
                 )
             )
         )
-        rels = result.scalars().all()
-
         relationships_data = []
         for r in rels:
             if r.source_class_id == cls.id:
@@ -246,7 +279,33 @@ class PGGraphStorage:
                     }
                 )
 
-        return {"class": class_data, "relationships": relationships_data}
+        result_data = {"class": class_data, "relationships": relationships_data}
+
+        # 触发图谱预览事件
+        viz_nodes = [
+            {
+                "id": class_name,
+                "label": class_name,
+                "type": class_name,
+                "properties": {"attributes": class_data["dataProperties"]},
+            }
+        ]
+        viz_edges = []
+        for r in relationships_data:
+            target = r.get("target_class") or r.get("source_class")
+            if target:
+                viz_nodes.append(
+                    {"id": target, "label": target, "type": target, "properties": {}}
+                )
+                source = class_name if "target_class" in r else target
+                dest = target if "target_class" in r else class_name
+                viz_edges.append(
+                    {"source": source, "target": dest, "label": r["relationship"]}
+                )
+
+        await self._emit_graph_view_event(nodes=viz_nodes, edges=viz_edges)
+
+        return result_data
 
     async def add_ontology_class(
         self,
