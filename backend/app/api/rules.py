@@ -57,6 +57,15 @@ class RuleUploadRequest(BaseModel):
     is_active: bool = Field(default=True, description="Whether the rule is active")
 
 
+class MigrationResponse(BaseModel):
+    """Response model for rule migration."""
+
+    migrated: int
+    skipped: int
+    failed: int
+    errors: list[str] = Field(default_factory=list)
+
+
 class RuleInfo(BaseModel):
     """Information about a rule."""
 
@@ -71,13 +80,18 @@ class RuleInfo(BaseModel):
     updated_at: str
 
 
-class MigrationResponse(BaseModel):
-    """Response model for migration operation."""
+class LogInfo(BaseModel):
+    """Information about an execution log entry."""
 
-    migrated: int
-    skipped: int
-    failed: int
-    errors: list[str]
+    id: int
+    timestamp: str
+    type: str
+    name: str
+    entity_id: str | None
+    actor_name: str | None
+    actor_type: str | None
+    success: bool
+    detail: dict | None
 
 
 @router.get("")
@@ -106,15 +120,55 @@ async def list_rules(
                 "trigger": {
                     "type": rule.trigger_type,
                     "entity": rule.trigger_entity,
-                    "property": rule.trigger_property
+                    "property": rule.trigger_property,
                 },
                 "is_active": rule.is_active,
                 "created_at": rule.created_at.isoformat(),
-                "updated_at": rule.updated_at.isoformat()
+                "updated_at": rule.updated_at.isoformat(),
             }
             for rule in rules
         ],
-        "count": len(rules)
+        "count": len(rules),
+    }
+
+
+@router.get("/logs")
+async def list_execution_logs(
+    limit: int = 100,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+) -> dict[str, Any]:
+    """List recent execution logs.
+
+    Args:
+        limit: Max number of logs to return
+        current_user: Current authenticated user
+        db: Database session
+
+    Returns:
+        Dictionary with list of execution logs
+    """
+    from app.repositories.rule_repository import ExecutionLogRepository
+    import json
+
+    repo = ExecutionLogRepository(db)
+    logs = await repo.list_recent(limit=limit)
+
+    return {
+        "logs": [
+            {
+                "id": l.id,
+                "timestamp": l.timestamp.isoformat(),
+                "type": l.type,
+                "name": l.name,
+                "entity_id": l.entity_id,
+                "actor_name": l.actor_name,
+                "actor_type": l.actor_type,
+                "success": l.success,
+                "detail": json.loads(l.detail) if l.detail else None,
+            }
+            for l in logs
+        ]
     }
 
 
@@ -151,11 +205,11 @@ async def get_rule(
         "trigger": {
             "type": rule.trigger_type,
             "entity": rule.trigger_entity,
-            "property": rule.trigger_property
+            "property": rule.trigger_property,
         },
         "is_active": rule.is_active,
         "created_at": rule.created_at.isoformat(),
-        "updated_at": rule.updated_at.isoformat()
+        "updated_at": rule.updated_at.isoformat(),
     }
 
 
@@ -185,8 +239,7 @@ async def upload_rule(
     # Check if rule already exists
     if await repo.exists(request.name):
         raise HTTPException(
-            status_code=400,
-            detail=f"Rule '{request.name}' already exists"
+            status_code=400, detail=f"Rule '{request.name}' already exists"
         )
 
     try:
@@ -197,8 +250,7 @@ async def upload_rule(
 
         if not rule_defs:
             raise HTTPException(
-                status_code=400,
-                detail="No valid RULE definition found in content"
+                status_code=400, detail="No valid RULE definition found in content"
             )
 
         rule_def = rule_defs[0]
@@ -216,7 +268,7 @@ async def upload_rule(
             trigger_entity=trigger_entity,
             trigger_property=trigger_property,
             priority=request.priority,
-            is_active=request.is_active
+            is_active=request.is_active,
         )
 
         # Register in the in-memory registry
@@ -235,10 +287,10 @@ async def upload_rule(
                 "trigger": {
                     "type": rule.trigger_type,
                     "entity": rule.trigger_entity,
-                    "property": rule.trigger_property
+                    "property": rule.trigger_property,
                 },
-                "is_active": rule.is_active
-            }
+                "is_active": rule.is_active,
+            },
         }
 
     except ValueError as e:
@@ -297,8 +349,7 @@ async def update_rule(
 
         if not rule_defs:
             raise HTTPException(
-                status_code=400,
-                detail="No valid RULE definition found in content"
+                status_code=400, detail="No valid RULE definition found in content"
             )
 
         rule_def = rule_defs[0]
@@ -316,7 +367,7 @@ async def update_rule(
             trigger_entity=trigger_entity,
             trigger_property=trigger_property,
             priority=request.priority,
-            is_active=request.is_active
+            is_active=request.is_active,
         )
 
         # Re-register in the in-memory registry
@@ -344,10 +395,10 @@ async def update_rule(
                 "trigger": {
                     "type": rule.trigger_type,
                     "entity": rule.trigger_entity,
-                    "property": rule.trigger_property
+                    "property": rule.trigger_property,
                 },
-                "is_active": rule.is_active
-            }
+                "is_active": rule.is_active,
+            },
         }
 
     except ValueError as e:
@@ -386,9 +437,7 @@ async def delete_rule(
 
     await repo.delete(name)
 
-    return {
-        "message": f"Rule '{name}' deleted successfully"
-    }
+    return {"message": f"Rule '{name}' deleted successfully"}
 
 
 @router.post("/migrate", response_model=MigrationResponse)
@@ -412,10 +461,7 @@ async def migrate_rules(
         Migration summary with counts and any errors
     """
     if _rule_storage is None:
-        raise HTTPException(
-            status_code=500,
-            detail="Rule storage not initialized"
-        )
+        raise HTTPException(status_code=500, detail="Rule storage not initialized")
 
     repo = RuleRepository(db)
     parser = RuleParser()
@@ -477,7 +523,7 @@ async def migrate_rules(
                 trigger_entity=rule_def.trigger.entity_type,
                 trigger_property=rule_def.trigger.property,
                 priority=priority,
-                is_active=True
+                is_active=True,
             )
 
             # Register in memory
@@ -496,7 +542,7 @@ async def migrate_rules(
         "migrated": migrated,
         "skipped": skipped,
         "failed": failed,
-        "errors": errors
+        "errors": errors,
     }
 
 
@@ -553,5 +599,5 @@ async def reload_rules(
         "loaded": loaded,
         "failed": failed,
         "errors": errors,
-        "message": f"Reloaded {loaded} rules from database"
+        "message": f"Reloaded {loaded} rules from database",
     }

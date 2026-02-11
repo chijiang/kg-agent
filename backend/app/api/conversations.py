@@ -158,6 +158,7 @@ async def add_message(
 
     await db.commit()
     await db.refresh(message)
+    # The relationship messages in conversation is now sorted by Message.id in the model
     return message
 
 

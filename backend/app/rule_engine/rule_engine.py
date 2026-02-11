@@ -191,6 +191,26 @@ class RuleEngine:
                 for_clause, event, session, bindings
             )
 
+            # Record execution log
+            try:
+                from app.repositories.rule_repository import ExecutionLogRepository
+
+                repo = ExecutionLogRepository(session)
+                await repo.create(
+                    type="RULE",
+                    name=rule.name,
+                    entity_id=str(event.entity_id) if event.entity_id is not None else None,
+                    actor_name=event.actor_name,
+                    actor_type=event.actor_type,
+                    success=True,
+                    detail={
+                        "entities_affected": result.get("entities_affected", 0),
+                        "statements_executed": result.get("statements_executed", 0),
+                    },
+                )
+            except Exception as log_err:
+                logger.error(f"Failed to record execution log: {log_err}")
+
             return {
                 "rule": rule.name,
                 "success": True,
@@ -200,6 +220,22 @@ class RuleEngine:
 
         except Exception as e:
             logger.exception(f"Error executing rule {rule.name}")
+            # Record failed execution log
+            try:
+                from app.repositories.rule_repository import ExecutionLogRepository
+
+                repo = ExecutionLogRepository(session)
+                await repo.create(
+                    type="RULE",
+                    name=rule.name,
+                    entity_id=str(event.entity_id) if event.entity_id is not None else None,
+                    actor_name=event.actor_name,
+                    actor_type=event.actor_type,
+                    success=False,
+                    detail={"error": str(e)},
+                )
+            except Exception as log_err:
+                logger.error(f"Failed to record execution log: {log_err}")
             return {"rule": rule.name, "error": str(e), "success": False}
 
     async def _execute_for_clause_async(

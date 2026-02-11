@@ -304,7 +304,17 @@
     "confirmDeleteAction": "确定要删除动作 \"{name}\" 吗？此操作无法撤销。",
     "deleting": "删除中...",
     "selectEntity": "选择实体",
-    "cancel": "取消"
+    "cancel": "取消",
+    "executionLogs": "执行日志",
+    "logTimestamp": "时间",
+    "logType": "类型",
+    "logName": "操作名称",
+    "logEntity": "实体",
+    "logActor": "执行者",
+    "logStatus": "状态",
+    "logDetails": "详情",
+    "loadLogsFailed": "加载执行日志失败",
+    "noLogs": "暂无执行日志"
   },
   "config": {
     "title": "配置管理",

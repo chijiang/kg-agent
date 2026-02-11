@@ -55,6 +55,8 @@ class PGGraphStorage:
         property: str,
         old_value: Any,
         new_value: Any,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ) -> None:
         """触发更新事件"""
         if self.event_emitter is None:
@@ -71,9 +73,11 @@ class PGGraphStorage:
             property=property,
             old_value=old_value,
             new_value=new_value,
+            actor_name=actor_name,
+            actor_type=actor_type,
         )
         logger.warning(
-            f"Emitting UpdateEvent: {entity_type}.{property} on {entity_id} ({old_value} -> {new_value})"
+            f"Emitting UpdateEvent: {entity_type}.{property} on {entity_id} ({old_value} -> {new_value}) by {actor_name}({actor_type})"
         )
         self.event_emitter.emit(event)
 
@@ -137,7 +141,12 @@ class PGGraphStorage:
         }
 
     async def update_entity(
-        self, entity_type: str, entity_id: str, updates: Dict[str, Any]
+        self,
+        entity_type: str,
+        entity_id: str,
+        updates: Dict[str, Any],
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ) -> Dict[str, Any]:
         """更新实体属性并触发事件"""
         # 尝试按 ID 或 name 查找
@@ -172,7 +181,13 @@ class PGGraphStorage:
             old_val = old_values.get(key)
             if old_val != new_val:
                 await self._emit_update_event(
-                    entity_type, entity_id, key, old_val, new_val
+                    entity_type,
+                    entity_id,
+                    key,
+                    old_val,
+                    new_val,
+                    actor_name=actor_name,
+                    actor_type=actor_type,
                 )
 
         return {**new_properties}

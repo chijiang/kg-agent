@@ -160,7 +160,13 @@ async def execute_action(
         )
 
         # Execute the action
-        result = await executor.execute(entity_type, action_name, context)
+        result = await executor.execute(
+            entity_type,
+            action_name,
+            context,
+            actor_name=current_user.username,
+            actor_type="USER",
+        )
     finally:
         if session:
             await session.close()

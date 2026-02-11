@@ -45,7 +45,12 @@ class ActionExecutor:
         self.event_emitter = event_emitter
 
     async def execute(
-        self, entity_type: str, action_name: str, context: EvaluationContext
+        self,
+        entity_type: str,
+        action_name: str,
+        context: EvaluationContext,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ) -> ExecutionResult:
         """Execute an ACTION.
 
@@ -58,6 +63,8 @@ class ActionExecutor:
             entity_type: The entity type (e.g., "PurchaseOrder")
             action_name: The action name (e.g., "submit")
             context: Evaluation context containing entity data
+            actor_name: Name of the actor executing the action
+            actor_type: Type of the actor (AI/USER/MCP)
 
         Returns:
             ExecutionResult with success status and any changes
@@ -76,6 +83,20 @@ class ActionExecutor:
         for precondition in action.preconditions:
             result = await evaluator.evaluate(precondition.condition)
             if not result:
+                # Record failed execution log
+                if context.session:
+                    from app.repositories.rule_repository import ExecutionLogRepository
+
+                    repo = ExecutionLogRepository(context.session)
+                    await repo.create(
+                        type="ACTION",
+                        name=f"{entity_type}.{action_name}",
+                        entity_id=str(context.entity["id"]),
+                        actor_name=actor_name,
+                        actor_type=actor_type,
+                        success=False,
+                        detail={"error": precondition.on_failure},
+                    )
                 return ExecutionResult(success=False, error=precondition.on_failure)
 
         # All preconditions passed - apply effect if present
@@ -91,6 +112,23 @@ class ActionExecutor:
                 changes,
                 context.session,
                 context_entity=context.entity,
+                actor_name=actor_name,
+                actor_type=actor_type,
+            )
+
+        # Record execution log
+        if context.session:
+            from app.repositories.rule_repository import ExecutionLogRepository
+
+            repo = ExecutionLogRepository(context.session)
+            await repo.create(
+                type="ACTION",
+                name=f"{entity_type}.{action_name}",
+                entity_id=str(context.entity["id"]),
+                actor_name=actor_name,
+                actor_type=actor_type,
+                success=True,
+                detail={"changes": changes},
             )
 
         return ExecutionResult(success=True, error=None, changes=changes)
@@ -102,6 +140,8 @@ class ActionExecutor:
         changes: dict[str, Any],
         session: Any,
         context_entity: dict[str, Any] | None = None,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ):
         """Persist property changes to PostgreSQL.
 
@@ -110,6 +150,8 @@ class ActionExecutor:
             entity_id: Entity name property
             changes: Dictionary of properties to update
             session: Active PostgreSQL DB session
+            actor_name: Actor name for event emission
+            actor_type: Actor type for event emission
         """
         from sqlalchemy import update
         from app.models.graph import GraphEntity
@@ -137,7 +179,7 @@ class ActionExecutor:
             current_props = entity.properties or {}
             merged_props = {**current_props, **changes}
 
-            # Update with merged properties
+            # Update with merged properties using the primary key
             await session.execute(
                 update(GraphEntity)
                 .where(GraphEntity.id == entity.id)
@@ -147,7 +189,12 @@ class ActionExecutor:
         # Emit events for rule engine
         if self.event_emitter:
             self._emit_update_events(
-                entity_type, entity_id, changes, context_entity=context_entity
+                entity_type,
+                entity_id,
+                changes,
+                context_entity=context_entity,
+                actor_name=actor_name,
+                actor_type=actor_type,
             )
 
     def _emit_update_events(
@@ -156,6 +203,8 @@ class ActionExecutor:
         entity_id: str,
         changes: dict[str, Any],
         context_entity: dict[str, Any] | None = None,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ):
         """Emit UpdateEvent for each changed property.
 
@@ -164,6 +213,8 @@ class ActionExecutor:
             entity_id: Entity name property
             changes: Dictionary of properties that were updated
             context_entity: Original entity properties from context
+            actor_name: Actor name
+            actor_type: Actor type
         """
         if not self.event_emitter:
             return
@@ -181,6 +232,8 @@ class ActionExecutor:
                 property=key,
                 old_value=old_val,
                 new_value=new_val,
+                actor_name=actor_name,
+                actor_type=actor_type,
             )
             self.event_emitter.emit(event)
 

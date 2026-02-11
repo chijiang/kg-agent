@@ -89,6 +89,8 @@ class UpdateEvent:
     property: str
     old_value: Any
     new_value: Any
+    actor_name: str | None = None
+    actor_type: str | None = None
 
 
 @dataclass

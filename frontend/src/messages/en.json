@@ -304,7 +304,17 @@
     "confirmDeleteAction": "Are you sure you want to delete action \"{name}\"? This action cannot be undone.",
     "deleting": "Deleting...",
     "selectEntity": "Select Entity",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "executionLogs": "Execution Logs",
+    "logTimestamp": "Timestamp",
+    "logType": "Type",
+    "logName": "Operation",
+    "logEntity": "Entity",
+    "logActor": "Actor",
+    "logStatus": "Status",
+    "logDetails": "Details",
+    "loadLogsFailed": "Failed to load execution logs",
+    "noLogs": "No execution logs"
   },
   "config": {
     "title": "Configuration Management",

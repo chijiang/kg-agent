@@ -25,6 +25,7 @@ import {
     ActionInfo,
     ActionDetail,
     ActionParameter,
+    ExecutionLog,
 } from '@/lib/api'
 import { toast } from 'sonner'
 import {
@@ -41,6 +42,7 @@ import {
     Play,
     Settings,
     Minus,
+    History,
 } from 'lucide-react'
 import BusinessEditor, { Schema, parseActionSignature } from '@/components/business-editor'
 import { graphApi } from '@/lib/api'
@@ -1034,6 +1036,10 @@ export default function RulesPage() {
     const [editingAction, setEditingAction] = useState<ActionDetail | null>(null)
     const [deletingAction, setDeletingAction] = useState<ActionInfo | null>(null)
 
+    // Logs state
+    const [logs, setLogs] = useState<ExecutionLog[]>([])
+    const [logsLoading, setLogsLoading] = useState(false)
+
     useEffect(() => {
         setIsHydrated(true)
     }, [])
@@ -1072,13 +1078,28 @@ export default function RulesPage() {
         }
     }, [t])
 
+    // Load logs
+    const loadLogs = useCallback(async () => {
+        setLogsLoading(true)
+        try {
+            const res = await rulesApi.listLogs()
+            setLogs(res.data.logs)
+        } catch (err) {
+            console.error('Failed to load logs:', err)
+            toast.error(t('loadLogsFailed'))
+        } finally {
+            setLogsLoading(false)
+        }
+    }, [t])
+
     // Initial load
     useEffect(() => {
         if (isHydrated && token) {
             loadRules()
             loadActions()
+            loadLogs()
         }
-    }, [isHydrated, token, loadRules, loadActions])
+    }, [isHydrated, token, loadRules, loadActions, loadLogs])
 
     // Edit rule
     const handleEditRule = async (rule: RuleInfo) => {
@@ -1168,6 +1189,13 @@ export default function RulesPage() {
                                 <Play className="h-4 w-4 mr-2" />
                                 {t('actions')} ({actions.length})
                             </TabsTrigger>
+                            <TabsTrigger
+                                value="logs"
+                                className="data-[state=active]:bg-white"
+                            >
+                                <History className="h-4 w-4 mr-2" />
+                                {t('executionLogs')}
+                            </TabsTrigger>
                         </TabsList>
 
                         {activeTab === 'rules' ? (
@@ -1256,6 +1284,85 @@ export default function RulesPage() {
                                     />
                                 ))}
                             </div>
+                        )}
+                    </TabsContent>
+
+                    {/* Logs Tab */}
+                    <TabsContent value="logs" className="mt-6">
+                        {logsLoading ? (
+                            <div className="flex items-center justify-center py-12">
+                                <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
+                            </div>
+                        ) : logs.length === 0 ? (
+                            <Card className="border-dashed">
+                                <CardContent className="flex flex-col items-center justify-center py-12">
+                                    <History className="h-12 w-12 text-slate-300 mb-4" />
+                                    <h3 className="text-lg font-medium text-slate-600">
+                                        {t('noLogs')}
+                                    </h3>
+                                </CardContent>
+                            </Card>
+                        ) : (
+                            <Card>
+                                <div className="overflow-x-auto">
+                                    <table className="w-full text-sm text-left">
+                                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                                            <tr>
+                                                <th className="px-6 py-3 font-medium">{t('logTimestamp')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logType')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logName')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logEntity')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logActor')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logStatus')}</th>
+                                                <th className="px-6 py-3 font-medium">{t('logDetails')}</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody className="divide-y divide-slate-100">
+                                            {logs.map((log) => (
+                                                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                                                        {new Date(log.timestamp).toLocaleString()}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${log.type === 'RULE' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                                                            }`}>
+                                                            {log.type}
+                                                        </span>
+                                                    </td>
+                                                    <td className="px-6 py-4 font-medium text-slate-800">
+                                                        {log.name}
+                                                    </td>
+                                                    <td className="px-6 py-4 text-slate-600 font-mono text-xs">
+                                                        {log.entity_id}
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        <div className="flex flex-col">
+                                                            <span className="text-slate-700 font-medium">{log.actor_name || '-'}</span>
+                                                            <span className="text-[10px] text-slate-400">{log.actor_type}</span>
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-6 py-4 whitespace-nowrap">
+                                                        {log.success ? (
+                                                            <span className="flex items-center text-green-600 text-xs font-medium">
+                                                                <CheckCircle className="h-3 w-3 mr-1" />
+                                                                {tCommon('success')}
+                                                            </span>
+                                                        ) : (
+                                                            <span className="flex items-center text-red-600 text-xs font-medium">
+                                                                <XCircle className="h-3 w-3 mr-1" />
+                                                                {tCommon('error')}
+                                                            </span>
+                                                        )}
+                                                    </td>
+                                                    <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap text-slate-500 text-xs" title={JSON.stringify(log.detail)}>
+                                                        {JSON.stringify(log.detail)}
+                                                    </td>
+                                                </tr>
+                                            ))}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </Card>
                         )}
                     </TabsContent>
                 </Tabs>

@@ -3,7 +3,7 @@
 from typing import List, Optional
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models.rule import ActionDefinition, Rule
+from app.models.rule import ActionDefinition, Rule, ExecutionLog
 
 
 class ActionDefinitionRepository:
@@ -347,3 +347,45 @@ class RuleRepository:
             True if exists, False otherwise
         """
         return await self.get_by_name(name) is not None
+
+
+class ExecutionLogRepository:
+    """Repository for ExecutionLog database operations."""
+
+    def __init__(self, session: AsyncSession):
+        """Initialize the repository with a database session."""
+        self.session = session
+
+    async def create(
+        self,
+        type: str,
+        name: str,
+        entity_id: str | None = None,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
+        success: bool = True,
+        detail: dict | None = None,
+    ) -> ExecutionLog:
+        """Create a new execution log entry."""
+        import json
+
+        log = ExecutionLog(
+            type=type,
+            name=name,
+            entity_id=str(entity_id) if entity_id is not None else None,
+            actor_name=actor_name,
+            actor_type=actor_type,
+            success=success,
+            detail=json.dumps(detail) if detail else None,
+        )
+        self.session.add(log)
+        await self.session.commit()
+        await self.session.refresh(log)
+        return log
+
+    async def list_recent(self, limit: int = 100) -> List[ExecutionLog]:
+        """List recent execution logs."""
+        result = await self.session.execute(
+            select(ExecutionLog).order_by(ExecutionLog.timestamp.desc()).limit(limit)
+        )
+        return list(result.scalars().all())

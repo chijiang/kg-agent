@@ -84,6 +84,8 @@ class StreamingBatchExecutor:
         executions: list[dict],
         config: BatchExecutionConfig | None = None,
         progress_callback: Callable[[dict], Awaitable] | None = None,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ) -> BatchExecutionResult:
         """Execute actions concurrently with controlled parallelism.
 
@@ -91,6 +93,8 @@ class StreamingBatchExecutor:
             executions: List of execution specs with entity_type, action_name, entity_id, params
             config: Optional batch execution configuration
             progress_callback: Optional async callback for progress updates
+            actor_name: Optional actor name
+            actor_type: Optional actor type
 
         Returns:
             BatchExecutionResult with success/failure breakdown
@@ -111,19 +115,20 @@ class StreamingBatchExecutor:
             """Process a single execution with semaphore control."""
 
             async def _execute():
-                return await self._execute_single_action(execution)
+                return await self._execute_single_action(
+                    execution, actor_name=actor_name, actor_type=actor_type
+                )
 
             async with semaphore:
                 try:
                     result = await asyncio.wait_for(
-                        _execute(),
-                        timeout=config.timeout_per_action
+                        _execute(), timeout=config.timeout_per_action
                     )
                     return execution, result
                 except asyncio.TimeoutError:
                     result = ExecutionResult(
                         success=False,
-                        error=f"Timeout after {config.timeout_per_action}s"
+                        error=f"Timeout after {config.timeout_per_action}s",
                     )
                     return execution, result
                 except Exception as e:
@@ -141,10 +146,9 @@ class StreamingBatchExecutor:
             if isinstance(result_or_error, Exception):
                 # Handle exception
                 error_msg = str(result_or_error)
-                failures.append({
-                    "entity_id": execution["entity_id"],
-                    "error": error_msg
-                })
+                failures.append(
+                    {"entity_id": execution["entity_id"], "error": error_msg}
+                )
 
                 logger.warning(
                     f"Action {execution['entity_type']}.{execution['action_name']} "
@@ -153,19 +157,23 @@ class StreamingBatchExecutor:
 
                 # Send progress update
                 if progress_callback:
-                    await progress_callback({
-                        "type": "action_progress",
-                        "completed": completed,
-                        "total": total,
-                        "entity_id": execution["entity_id"],
-                        "success": False,
-                        "error": error_msg,
-                    })
+                    await progress_callback(
+                        {
+                            "type": "action_progress",
+                            "completed": completed,
+                            "total": total,
+                            "entity_id": execution["entity_id"],
+                            "success": False,
+                            "error": error_msg,
+                        }
+                    )
             elif result_or_error.success:
-                successes.append({
-                    "entity_id": execution["entity_id"],
-                    "changes": result_or_error.changes
-                })
+                successes.append(
+                    {
+                        "entity_id": execution["entity_id"],
+                        "changes": result_or_error.changes,
+                    }
+                )
 
                 logger.info(
                     f"Action {execution['entity_type']}.{execution['action_name']} "
@@ -174,20 +182,24 @@ class StreamingBatchExecutor:
 
                 # Send progress update
                 if progress_callback:
-                    await progress_callback({
-                        "type": "action_progress",
-                        "completed": completed,
-                        "total": total,
-                        "entity_id": execution["entity_id"],
-                        "success": True,
-                        "changes": result_or_error.changes,
-                    })
+                    await progress_callback(
+                        {
+                            "type": "action_progress",
+                            "completed": completed,
+                            "total": total,
+                            "entity_id": execution["entity_id"],
+                            "success": True,
+                            "changes": result_or_error.changes,
+                        }
+                    )
             else:
                 # Execution failed but not due to exception
-                failures.append({
-                    "entity_id": execution["entity_id"],
-                    "error": result_or_error.error or "Unknown error"
-                })
+                failures.append(
+                    {
+                        "entity_id": execution["entity_id"],
+                        "error": result_or_error.error or "Unknown error",
+                    }
+                )
 
                 logger.warning(
                     f"Action {execution['entity_type']}.{execution['action_name']} "
@@ -196,14 +208,16 @@ class StreamingBatchExecutor:
 
                 # Send progress update
                 if progress_callback:
-                    await progress_callback({
-                        "type": "action_progress",
-                        "completed": completed,
-                        "total": total,
-                        "entity_id": execution["entity_id"],
-                        "success": False,
-                        "error": result_or_error.error,
-                    })
+                    await progress_callback(
+                        {
+                            "type": "action_progress",
+                            "completed": completed,
+                            "total": total,
+                            "entity_id": execution["entity_id"],
+                            "success": False,
+                            "error": result_or_error.error,
+                        }
+                    )
 
         duration = (datetime.now() - start_time).total_seconds()
 
@@ -218,12 +232,16 @@ class StreamingBatchExecutor:
 
     async def _execute_single_action(
         self,
-        execution: dict
+        execution: dict,
+        actor_name: str | None = None,
+        actor_type: str | None = None,
     ) -> ExecutionResult:
         """Execute a single action.
 
         Args:
             execution: Execution spec with entity_type, action_name, entity_id, params
+            actor_name: Optional actor name
+            actor_type: Optional actor type
 
         Returns:
             ExecutionResult with success status and changes
@@ -239,23 +257,34 @@ class StreamingBatchExecutor:
         if not entity_data:
             return ExecutionResult(
                 success=False,
-                error=f"Entity '{entity_id}' not found (type: {entity_type})"
+                error=f"Entity '{entity_id}' not found (type: {entity_type})",
             )
 
         # Execute the action with session
         async with self.get_session_func() as session:
             # Create evaluation context with session
             context = EvaluationContext(
-                entity={"id": entity_id, **entity_data},
+                entity={**entity_data, "id": entity_id},
                 old_values={},
                 session=session,
-                variables=params
+                variables=params,
             )
 
             # Execute the action
-            return await self.action_executor.execute(entity_type, action_name, context)
+            result = await self.action_executor.execute(
+                entity_type,
+                action_name,
+                context,
+                actor_name=actor_name,
+                actor_type=actor_type,
+            )
+            if result.success:
+                await session.commit()
+            return result
 
-    async def _get_entity_data(self, entity_type: str, entity_id: str) -> dict[str, Any]:
+    async def _get_entity_data(
+        self, entity_type: str, entity_id: str
+    ) -> dict[str, Any]:
         """Get entity data from PostgreSQL.
 
         Args:

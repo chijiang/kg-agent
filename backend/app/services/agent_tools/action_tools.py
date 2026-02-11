@@ -188,7 +188,7 @@ def create_action_tools(
         # Create evaluation context
         session = None  # We won't execute, just validate
         context = EvaluationContext(
-            entity={"id": entity_id, **entity_data},
+            entity={**entity_data, "id": entity_id},
             old_values={},
             session=session,
             variables={},
@@ -260,12 +260,21 @@ def create_action_tools(
         session_cm = get_session_func()
         async with session_cm as session:
             context = EvaluationContext(
-                entity={"id": entity_id, **entity_data},
+                entity={**entity_data, "id": entity_id},
                 old_values={},
                 session=session,
                 variables=params,
             )
-            result = await action_executor.execute(entity_type, action_name, context)
+            result = await action_executor.execute(
+                entity_type,
+                action_name,
+                context,
+                actor_name="AI Assistant",
+                actor_type="AI",
+            )
+            if result.success:
+                await session.commit()
+            return result
 
         if result.success:
             changes_str = ", ".join([f"{k}={v}" for k, v in result.changes.items()])
@@ -322,7 +331,9 @@ def create_action_tools(
         ]
 
         # Execute batch
-        results = await executor.execute_batch(executions)
+        results = await executor.execute_batch(
+            executions, actor_name="AI Assistant", actor_type="AI"
+        )
 
         # Format results
         output.append(f"总计: {results['total']}")

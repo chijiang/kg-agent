@@ -107,7 +107,7 @@ async def chat_stream_v2(
             chunk["conversation_id"] = conversation.id
 
             if chunk.get("type") == "thinking":
-                thinking = chunk.get("content", "")
+                thinking += chunk.get("content", "")
             elif chunk.get("type") == "content":
                 full_content += chunk.get("content", "")
             elif chunk.get("type") == "graph_data":

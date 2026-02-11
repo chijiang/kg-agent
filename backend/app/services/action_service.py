@@ -232,7 +232,8 @@ async def validate_preconditions(
         return {"valid": False, "error": f"Entity {entity_type} {entity_id} not found"}
 
     context = EvaluationContext(
-        entity={"id": entity_id, **entity_data},
+        entity={**entity_data, "id": entity_id},
+        old_values={},
         session=session,
     )
     evaluator = ExpressionEvaluator(context)
@@ -263,6 +264,8 @@ async def execute_single_action(
     action_name: str,
     entity_id: str,
     params: dict[str, Any] | None = None,
+    actor_name: str | None = None,
+    actor_type: str | None = None,
 ) -> dict[str, Any]:
     """Execute a single action on an entity.
 
@@ -273,6 +276,8 @@ async def execute_single_action(
         action_name: Action name
         entity_id: Entity identifier
         params: Optional action parameters
+        actor_name: Optional actor name
+        actor_type: Optional actor type
 
     Returns:
         Dict with 'success', 'error', 'changes' keys
@@ -285,13 +290,23 @@ async def execute_single_action(
         }
 
     context = EvaluationContext(
-        entity={"id": entity_id, **entity_data},
+        entity={**entity_data, "id": entity_id},
+        old_values={},
         variables=params or {},
         session=session,
     )
 
     try:
-        result = await executor.execute(entity_type, action_name, context)
+        result = await executor.execute(
+            entity_type,
+            action_name,
+            context,
+            actor_name=actor_name,
+            actor_type=actor_type,
+        )
+        if result.success:
+            await session.commit()
+
         return {
             "success": result.success,
             "error": result.error,

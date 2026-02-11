@@ -121,7 +121,7 @@ export default function ImportPage() {
                   {t('graph.import.clearGraph')}
                 </Button>
               </DialogTrigger>
-              <DialogContent className="sm:max-w-[425px] justify-items-center">
+              <DialogContent className="sm:max-w-[425px]">
                 <DialogHeader className="flex flex-col items-center text-center sm:text-center w-full">
                   <DialogTitle className="flex items-center justify-center text-red-600 w-full text-center">
                     <AlertTriangle className="w-5 h-5 mr-2" />
@@ -134,7 +134,7 @@ export default function ImportPage() {
                 <div className="flex flex-col gap-4 py-4 w-full items-center">
                   <Button
                     variant="outline"
-                    className="w-full flex h-auto py-4 px-4 border border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 justify-center text-center"
+                    className="w-full flex h-auto py-4 px-4 border border-gray-300 hover:bg-red-50 hover:text-red-600 hover:border-red-300 justify-center text-center whitespace-normal"
                     onClick={() => handleClear(false)}
                     disabled={loading}
                   >
@@ -145,7 +145,7 @@ export default function ImportPage() {
                   </Button>
                   <Button
                     variant="destructive"
-                    className="w-full flex h-auto py-4 px-4 justify-center text-center"
+                    className="w-full flex h-auto py-4 px-4 justify-center text-center whitespace-normal"
                     onClick={() => handleClear(true)}
                     disabled={loading}
                   >

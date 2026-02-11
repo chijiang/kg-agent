@@ -63,3 +63,26 @@ class Rule(Base):
         if "priority" not in kwargs:
             kwargs["priority"] = 0
         super().__init__(**kwargs)
+
+
+class ExecutionLog(Base):
+    """Logs of rule and action executions."""
+
+    __tablename__ = "execution_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    timestamp: Mapped[datetime] = mapped_column(default=datetime.utcnow, index=True)
+    type: Mapped[str] = mapped_column(String(20), nullable=False)  # RULE / ACTION
+    name: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    entity_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    actor_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    actor_type: Mapped[str | None] = mapped_column(
+        String(20), nullable=True
+    )  # AI / USER / MCP / SYSTEM
+    success: Mapped[bool] = mapped_column(Boolean, default=True)
+    detail: Mapped[dict | None] = mapped_column(
+        Text, nullable=True
+    )  # Store as JSON string
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)

@@ -166,6 +166,18 @@ export interface RuleDetail extends RuleInfo {
   dsl_content: string
 }
 
+export interface ExecutionLog {
+  id: number
+  timestamp: string
+  type: 'RULE' | 'ACTION'
+  name: string
+  entity_id: string | null
+  actor_name: string | null
+  actor_type: 'AI' | 'USER' | 'MCP' | 'SYSTEM' | null
+  success: boolean
+  detail: any
+}
+
 export interface ActionParameter {
   name: string
   type: string
@@ -218,6 +230,9 @@ export const rulesApi = {
       // Extract validation error from response
       throw e
     }),
+
+  listLogs: (limit: number = 100) =>
+    api.get<{ logs: ExecutionLog[] }>('/api/rules/logs', { params: { limit } }),
 }
 
 export const actionsApi = {

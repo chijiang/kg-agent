@@ -208,7 +208,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
             </div>
 
             {/* Message bubble */}
-            <div className={`max-w-[80%] ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
+            <div className={`max-w-[80%] min-w-0 break-words ${msg.role === 'user' ? 'items-end' : 'items-start'}`}>
               {/* Thinking panel */}
               {msg.thinking && (
                 <button
@@ -238,7 +238,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
                 {msg.role === 'user' ? (
                   <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.content}</p>
                 ) : (
-                  <div className="prose max-w-none text-[13px] text-slate-700 prose-slate prose-headings:font-semibold prose-headings:text-slate-800 prose-p:leading-relaxed prose-li:my-1 prose-table:border prose-table:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1">
+                  <div className="prose max-w-none text-[13px] text-slate-700 prose-slate prose-headings:font-semibold prose-headings:text-slate-800 prose-p:leading-relaxed prose-li:my-1 prose-table:border prose-table:border-slate-200 prose-th:bg-slate-50 prose-th:px-2 prose-th:py-1 prose-td:px-2 prose-td:py-1 overflow-x-auto min-w-0">
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
                       {msg.content || '...'}
                     </ReactMarkdown>

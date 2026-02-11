@@ -119,7 +119,14 @@ async def execute_action(
     await _ensure_loaded()
     async with async_session() as session:
         result = await action_service.execute_single_action(
-            _get_executor(), session, entity_type, action_name, entity_id, params
+            _get_executor(),
+            session,
+            entity_type,
+            action_name,
+            entity_id,
+            params,
+            actor_name="MCP Call",
+            actor_type="MCP",
         )
         if result["success"]:
             await session.commit()
@@ -147,7 +154,14 @@ async def batch_execute_action(
     async with async_session() as session:
         for eid in entity_ids:
             res = await action_service.execute_single_action(
-                _get_executor(), session, entity_type, action_name, eid, params
+                _get_executor(),
+                session,
+                entity_type,
+                action_name,
+                eid,
+                params,
+                actor_name="MCP Call",
+                actor_type="MCP",
             )
             results.append({"id": eid, **res})
 
