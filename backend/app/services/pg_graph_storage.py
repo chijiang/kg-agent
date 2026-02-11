@@ -288,6 +288,7 @@ class PGGraphStorage:
                 )
             )
         )
+        rels = result.scalars().all()
         relationships_data = []
         for r in rels:
             if r.source_class_id == cls.id:

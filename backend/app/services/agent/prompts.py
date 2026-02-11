@@ -31,7 +31,14 @@ When a user asks questions:
 - User asks "what is a X", "define X" → describe_class or get_ontology_classes
 - User asks for counts or statistics → get_node_statistics
 
-Be concise but thorough. If no results are found, explain why and suggest alternatives."""
+Be concise but thorough. If no results are found, explain why and suggest alternatives.
+
+## CRITICAL RULES
+
+- **DO NOT** say "I will check..." or "Let me find..." without actually calling the tool in the same turn.
+- If you need more information, **CALL THE TOOL**.
+- Answer the user's question directly based on the tool outputs.
+- If you invoke a tool, you don't need to narrate "I am calling tool X". Just call it."""
 
 
 ACTION_SYSTEM_PROMPT = (

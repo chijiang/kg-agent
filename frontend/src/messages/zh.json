@@ -538,7 +538,8 @@
       "noProperties": "暂无属性",
       "availableActions": "可用操作",
       "execute": "执行",
-      "editingMode": "正在编辑模式 - 修改属性值后点击保存"
+      "editingMode": "正在编辑模式 - 修改属性值后点击保存",
+      "selectNodeHint": "请选择一个节点查看详情"
     }
   },
   "toasts": {

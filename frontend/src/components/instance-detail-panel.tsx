@@ -6,9 +6,10 @@ import { graphApi, actionsApi, ActionRuntimeInfo } from '@/lib/api'
 import { useAuthStore } from '@/lib/auth'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
-import { X, Save, Edit2, Check, XCircle, Play, Loader2, Plus } from 'lucide-react'
+import { X, Save, Edit2, Check, XCircle, Play, Loader2, Plus, Info, Zap, ChevronRight, ChevronDown, Trash2 } from 'lucide-react'
 import { toast } from 'sonner'
 import { useTranslations } from 'next-intl'
+import { cn } from '@/lib/utils'
 
 interface InstanceNode {
     id: string
@@ -18,6 +19,7 @@ interface InstanceNode {
     labels?: string[]
     aliases?: string[]
     properties?: Record<string, any>
+    color?: string
 }
 
 interface InstanceDetailPanelProps {
@@ -40,11 +42,14 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
     const [executingAction, setExecutingAction] = useState<string | null>(null)
     const [actionParams, setActionParams] = useState<Record<string, Record<string, any>>>({})
 
+    // Collapsible sections state
+    const [propsOpen, setPropsOpen] = useState(true)
+    const [actionsOpen, setActionsOpen] = useState(true)
+
     useEffect(() => {
         if (node) {
-            // 加载完整的属性
+            setEditing(false)
             loadNodeDetails()
-            // 加载可用操作
             loadActions()
         }
     }, [node])
@@ -56,14 +61,12 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
             const res = await graphApi.getNode(node.id || node.name, token)
             const data = res.data || {}
 
-            // 提取元数据
             setMetadata({
                 ID: data.id,
                 NAME: data.name,
                 TYPE: data.entity_type
             })
 
-            // 提取并过滤业务属性 (PostgreSQL 中 properties 是个字典)
             const props = data.properties || {}
             const filteredProps: Record<string, any> = {}
             Object.entries(props).forEach(([key, value]) => {
@@ -78,7 +81,6 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
             setOriginalAliases(aliases)
         } catch (err) {
             console.error('Failed to load node details:', err)
-            // 回退逻辑
             setMetadata({
                 NAME: node.name,
                 TYPE: node.nodeLabel
@@ -114,7 +116,6 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
 
         setSaving(true)
         try {
-            // 只发送修改过的属性
             const updates: Record<string, any> = {}
             Object.entries(editedProperties).forEach(([key, value]) => {
                 if (expandedProps[key] !== value) {
@@ -122,7 +123,6 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                 }
             })
 
-            // 检查别名是否修改
             const filteredEditingAliases = editingAliases.filter(a => a.trim() !== '')
             if (JSON.stringify(filteredEditingAliases) !== JSON.stringify(originalAliases)) {
                 updates['__aliases__'] = filteredEditingAliases
@@ -152,7 +152,6 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
         if (!node || !token) return
 
         try {
-            // 获取所有标签对应的操作
             const labels = node.labels || [node.nodeLabel]
             const allActions: any[] = []
 
@@ -163,7 +162,6 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                 }
             }
 
-            // 去重
             const uniqueActions = Array.from(new Map(allActions.map(a => [`${a.entity_type}.${a.action_name}`, a])).values()) as ActionRuntimeInfo[]
             setActions(uniqueActions)
         } catch (err) {
@@ -190,14 +188,12 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
 
             if (res.data?.success) {
                 toast.success(res.data.message || t('components.instance.actionSuccess'))
-                // 刷新数据
                 loadNodeDetails()
                 onUpdate?.()
             } else {
                 toast.warning(res.data?.message || res.data?.detail || t('components.instance.actionFailed'))
             }
         } catch (err: any) {
-            // 只在非业务逻辑错误时记录详细日志
             const errorMessage = err.response?.data?.detail || err.message || t('components.instance.actionExecutionFailed')
             toast.error(errorMessage)
         } finally {
@@ -205,232 +201,242 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
         }
     }
 
-    if (!node) return null
+    if (!node) {
+        return (
+            <div className="bg-white rounded-lg border h-full flex items-center justify-center p-6 text-center text-slate-400">
+                <div className="flex flex-col items-center gap-2">
+                    <Info className="h-8 w-8 text-slate-200" />
+                    <p className="text-sm">{t('components.instance.selectNodeHint') || '请选择一个节点查看详情'}</p>
+                </div>
+            </div>
+        )
+    }
 
     const displayProps = editing ? editedProperties : expandedProps
 
     return (
-        <div className="bg-white rounded-lg shadow-lg border h-full flex flex-col">
+        <div className="bg-white rounded-lg shadow-sm border h-full flex flex-col font-sans">
             {/* 头部 */}
-            <div className="p-4 border-b flex items-center justify-between bg-gradient-to-r from-emerald-50 to-teal-50">
-                <div className="flex items-center gap-2">
+            <div className="px-3 py-2.5 border-b flex items-center justify-between bg-slate-50/50">
+                <div className="flex items-center gap-2 min-w-0">
                     <div
-                        className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-                        style={{ backgroundColor: node.properties?.color || '#4C8EDA' }}
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-white text-[9px] font-bold flex-shrink-0"
+                        style={{ backgroundColor: node.color || '#4C8EDA' }}
                     >
                         {node.nodeLabel?.charAt(0) || 'E'}
                     </div>
-                    <div>
-                        <h3 className="font-semibold text-gray-800">{node.name}</h3>
-                        <p className="text-xs text-gray-500">{node.nodeLabel}</p>
+                    <div className="min-w-0">
+                        <h3 className="text-sm font-semibold text-slate-800 truncate leading-tight">{node.name}</h3>
                     </div>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1 flex-shrink-0">
                     {!editing ? (
-                        <Button variant="ghost" size="sm" onClick={handleStartEdit}>
-                            <Edit2 className="h-4 w-4" />
+                        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-slate-200" onClick={handleStartEdit}>
+                            <Edit2 className="h-3.5 w-3.5 text-slate-500" />
                         </Button>
                     ) : (
                         <>
-                            <Button variant="ghost" size="sm" onClick={handleCancelEdit}>
-                                <XCircle className="h-4 w-4 text-gray-500" />
+                            <Button variant="ghost" size="sm" className="h-6 w-6 p-0 hover:bg-red-100" onClick={handleCancelEdit}>
+                                <XCircle className="h-3.5 w-3.5 text-red-500" />
                             </Button>
                             <Button
-                                variant="default"
+                                variant="ghost"
                                 size="sm"
+                                className="h-6 w-6 p-0 hover:bg-green-100"
                                 onClick={handleSave}
                                 disabled={saving}
                             >
                                 {saving ? (
-                                    <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white" />
+                                    <div className="animate-spin rounded-full h-3 w-3 border-b-2 border-green-600" />
                                 ) : (
-                                    <Check className="h-4 w-4" />
+                                    <Check className="h-3.5 w-3.5 text-green-600" />
                                 )}
                             </Button>
                         </>
                     )}
                     <button
                         onClick={onClose}
-                        className="p-1 hover:bg-gray-200 rounded transition-colors"
+                        className="h-6 w-6 flex items-center justify-center hover:bg-slate-200 rounded transition-colors"
                     >
-                        <X className="h-4 w-4 text-gray-500" />
+                        <X className="h-3.5 w-3.5 text-slate-400" />
                     </button>
                 </div>
             </div>
 
-            {/* 元数据 (不可编辑) */}
-            <div className="p-4 border-b bg-gray-50/50">
-                <div className="grid grid-cols-1 gap-2">
-                    {Object.entries(metadata).map(([key, value]) => (
-                        <div key={key} className="flex flex-col gap-0.5">
-                            <span className="text-[10px] font-bold text-gray-400 tracking-tighter">{key}</span>
-                            <span className="text-sm font-medium text-gray-600 truncate">{String(value || '-')}</span>
-                        </div>
-                    ))}
+            {/* 内容区域 */}
+            <div className="flex-1 overflow-y-auto custom-scrollbar">
+                {/* 元数据 Badge */}
+                <div className="px-3 py-2 flex flex-wrap gap-1.5 border-b border-slate-50">
+                    <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-100 text-slate-500 border border-slate-200">
+                        {node.nodeLabel}
+                    </span>
+                    {metadata.ID && (
+                        <span className="px-1.5 py-0.5 rounded text-[10px] bg-slate-50 text-slate-400 border border-slate-100">
+                            ID: {metadata.ID}
+                        </span>
+                    )}
                 </div>
 
-                {/* 别名展示/编辑 */}
-                <div className="mt-3 pt-3 border-t">
-                    <span className="text-[10px] font-bold text-gray-400 tracking-tighter uppercase">别名</span>
-                    {editing ? (
-                        <div className="flex flex-col gap-1.5 mt-1">
-                            {editingAliases.map((a, i) => (
-                                <div key={i} className="flex gap-1 items-center">
-                                    <Input
-                                        value={a}
-                                        onChange={(e) => {
-                                            const newAliases = [...editingAliases]
-                                            newAliases[i] = e.target.value
-                                            setEditingAliases(newAliases)
-                                        }}
-                                        className="h-7 text-xs border-emerald-100 focus-visible:ring-emerald-500"
-                                        placeholder="输入别名"
-                                    />
-                                    <button
-                                        onClick={() => setEditingAliases(editingAliases.filter((_, idx) => idx !== i))}
-                                        className="text-red-400 hover:text-red-600"
-                                    >
-                                        <X className="h-3 w-3" />
-                                    </button>
-                                </div>
-                            ))}
-                            <Button
-                                variant="ghost"
-                                size="sm"
-                                className="h-6 text-[10px] w-fit text-emerald-600"
-                                onClick={() => setEditingAliases([...editingAliases, ''])}
-                            >
-                                <Plus className="h-3 w-3 mr-1" /> 添加别名
-                            </Button>
-                        </div>
-                    ) : (
-                        <div className="flex flex-wrap gap-1 mt-1">
-                            {editingAliases.length > 0 ? (
-                                editingAliases.map((a, i) => (
-                                    <span key={i} className="text-xs bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-full border border-emerald-100">
+                {/* 别名 */}
+                {(editing || editingAliases.length > 0) && (
+                    <div className="px-3 py-2 border-b border-slate-50">
+                        <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase mb-1.5 block">别名</span>
+                        {editing ? (
+                            <div className="flex flex-col gap-1.5">
+                                {editingAliases.map((a, i) => (
+                                    <div key={i} className="flex gap-1 items-center">
+                                        <Input
+                                            value={a}
+                                            onChange={(e) => {
+                                                const newAliases = [...editingAliases]
+                                                newAliases[i] = e.target.value
+                                                setEditingAliases(newAliases)
+                                            }}
+                                            className="h-6 text-xs px-2"
+                                            placeholder="别名"
+                                        />
+                                        <button onClick={() => setEditingAliases(editingAliases.filter((_, idx) => idx !== i))} className="text-slate-400 hover:text-red-500">
+                                            <X className="h-3 w-3" />
+                                        </button>
+                                    </div>
+                                ))}
+                                <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    className="h-5 text-[10px] w-fit px-0 text-primary hover:bg-transparent hover:text-primary/80"
+                                    onClick={() => setEditingAliases([...editingAliases, ''])}
+                                >
+                                    <Plus className="h-3 w-3 mr-1" /> 添加别名
+                                </Button>
+                            </div>
+                        ) : (
+                            <div className="flex flex-wrap gap-1">
+                                {editingAliases.map((a, i) => (
+                                    <span key={i} className="text-[10px] bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-100">
                                         {a}
                                     </span>
-                                ))
+                                ))}
+                            </div>
+                        )}
+                    </div>
+                )}
+
+                {/* 属性列表 */}
+                <div className="py-1">
+                    <button
+                        className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 transition-colors"
+                        onClick={() => setPropsOpen(!propsOpen)}
+                    >
+                        <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                            <div className="w-1 h-3 bg-blue-400 rounded-full" />
+                            {t('components.instance.businessProperties')}
+                        </h4>
+                        {propsOpen ? <ChevronDown className="h-3 w-3 text-slate-400" /> : <ChevronRight className="h-3 w-3 text-slate-400" />}
+                    </button>
+
+                    {propsOpen && (
+                        <div className="px-3 py-1 space-y-0.5">
+                            {Object.keys(displayProps).length === 0 ? (
+                                <p className="text-[10px] text-slate-400 italic py-1 pl-2">暂无属性</p>
                             ) : (
-                                <span className="text-xs text-gray-400 italic">无别名</span>
+                                Object.entries(displayProps).map(([key, value]) => (
+                                    <div key={key} className="group flex items-center justify-between py-1 border-b border-dashed border-slate-100 last:border-0 hover:bg-slate-50/80 rounded px-1 -mx-1">
+                                        <span className="text-[11px] font-medium text-slate-500 min-w-[30%] truncate pr-2" title={key}>
+                                            {key}
+                                        </span>
+                                        {editing ? (
+                                            <Input
+                                                value={String(value ?? '')}
+                                                onChange={(e) => handlePropertyChange(key, e.target.value)}
+                                                className="h-6 text-xs bg-white text-right w-full border-slate-200 focus-visible:ring-1"
+                                            />
+                                        ) : (
+                                            <span className="text-[11px] text-slate-700 truncate text-right font-mono" title={String(value)}>
+                                                {formatValue(value)}
+                                            </span>
+                                        )}
+                                    </div>
+                                ))
                             )}
                         </div>
                     )}
                 </div>
-            </div>
-
-            {/* 属性列表 */}
-            <div className="flex-1 overflow-y-auto p-4">
-                <div className="flex items-center justify-between mb-3">
-                    <h4 className="text-sm font-semibold text-gray-700">{t('components.instance.businessProperties')}</h4>
-                    {editing && (
-                        <span className="text-[10px] text-emerald-600 font-medium bg-emerald-50 px-1.5 py-0.5 rounded">{t('components.instance.editing')}</span>
-                    )}
-                </div>
-
-                {Object.keys(displayProps).length === 0 ? (
-                    <p className="text-sm text-gray-400 italic">{t('components.instance.noProperties')}</p>
-                ) : (
-                    <div className="space-y-4">
-                        {Object.entries(displayProps).map(([key, value]) => (
-                            <div key={key} className="space-y-1">
-                                <label className="text-xs font-medium text-gray-500 tracking-wide">
-                                    {key}
-                                </label>
-                                {editing ? (
-                                    <Input
-                                        value={String(value ?? '')}
-                                        onChange={(e) => handlePropertyChange(key, e.target.value)}
-                                        className="w-full h-8 text-sm border-emerald-100 focus-visible:ring-emerald-500"
-                                    />
-                                ) : (
-                                    <div className="px-3 py-2 bg-white rounded-lg text-sm text-gray-700 border border-gray-100 shadow-sm">
-                                        {formatValue(value)}
-                                    </div>
-                                )}
-                            </div>
-                        ))}
-                    </div>
-                )}
 
                 {/* 可用操作 */}
                 {actions.length > 0 && (
-                    <div className="mt-6 pt-6 border-t">
-                        <h4 className="text-sm font-semibold text-gray-700 mb-3">{t('components.instance.availableActions')}</h4>
-                        <div className="flex flex-col gap-3">
-                            {actions.map((action) => {
-                                const actionKey = `${action.entity_type}.${action.action_name}`
-                                const isExecuting = executingAction === actionKey
+                    <div className="py-1 border-t border-slate-50 mt-1">
+                        <button
+                            className="w-full flex items-center justify-between px-3 py-1.5 hover:bg-slate-50 transition-colors"
+                            onClick={() => setActionsOpen(!actionsOpen)}
+                        >
+                            <h4 className="text-[11px] font-bold text-slate-500 uppercase tracking-wide flex items-center gap-1.5">
+                                <div className="w-1 h-3 bg-purple-400 rounded-full" />
+                                {t('components.instance.availableActions')}
+                            </h4>
+                            {actionsOpen ? <ChevronDown className="h-3 w-3 text-slate-400" /> : <ChevronRight className="h-3 w-3 text-slate-400" />}
+                        </button>
 
-                                return (
-                                    <div key={actionKey} className="flex flex-col gap-2 p-3 border rounded-lg bg-white shadow-sm hover:border-emerald-200 transition-colors">
-                                        <div className="flex items-center justify-between gap-4">
-                                            <div className="flex flex-col gap-0.5">
+                        {actionsOpen && (
+                            <div className="px-3 py-1 space-y-2">
+                                {actions.map((action) => {
+                                    const actionKey = `${action.entity_type}.${action.action_name}`
+                                    const isExecuting = executingAction === actionKey
+
+                                    return (
+                                        <div key={actionKey} className="border rounded bg-slate-50/30 p-2 space-y-2">
+                                            <div className="flex items-center justify-between">
                                                 <div className="flex items-center gap-1.5">
-                                                    <span className="text-sm font-medium text-gray-700">{action.action_name}</span>
+                                                    <Zap className="h-3 w-3 text-purple-500 fill-purple-500/10" />
+                                                    <span className="text-xs font-medium text-slate-700">{action.action_name}</span>
                                                     {action.has_call && (
-                                                        <span className="px-1 py-0.5 rounded text-[8px] bg-blue-100 text-blue-600 font-medium">gRPC</span>
+                                                        <span className="text-[9px] bg-blue-50 text-blue-600 px-1 py-px rounded border border-blue-100">RPC</span>
                                                     )}
                                                 </div>
-                                                {action.description && (
-                                                    <span className="text-[10px] text-gray-400 italic leading-tight">
-                                                        {action.description}
-                                                    </span>
-                                                )}
+                                                <Button
+                                                    variant="ghost"
+                                                    size="sm"
+                                                    className="h-5 text-[10px] px-2 text-purple-600 hover:text-purple-700 hover:bg-purple-50"
+                                                    onClick={() => handleExecuteAction(action)}
+                                                    disabled={!!executingAction}
+                                                >
+                                                    {isExecuting ? (
+                                                        <Loader2 className="h-3 w-3 animate-spin" />
+                                                    ) : (
+                                                        <Play className="h-3 w-3" />
+                                                    )}
+                                                    <span className="ml-1">{t('components.instance.execute')}</span>
+                                                </Button>
                                             </div>
-                                            <Button
-                                                variant="outline"
-                                                size="sm"
-                                                className="gap-2 border-emerald-200 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-300"
-                                                onClick={() => handleExecuteAction(action)}
-                                                disabled={!!executingAction}
-                                            >
-                                                {isExecuting ? (
-                                                    <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
-                                                ) : (
-                                                    <Play className="h-3 w-3 text-emerald-600 fill-emerald-600" />
-                                                )}
-                                                {t('components.instance.execute')}
-                                            </Button>
-                                        </div>
 
-                                        {action.parameters && action.parameters.length > 0 && (
-                                            <div className="space-y-2 mt-1 px-2 py-2 bg-gray-50 rounded-md">
-                                                {action.parameters.map((param) => (
-                                                    <div key={param.name} className="flex items-center gap-2">
-                                                        <label className="text-[10px] text-gray-400 font-medium min-w-[60px] uppercase">{param.name}:</label>
-                                                        <Input
-                                                            className="h-7 text-xs bg-white"
-                                                            placeholder={`${param.type}${param.optional ? ' (可选)' : ''}`}
-                                                            value={actionParams[actionKey]?.[param.name] ?? ''}
-                                                            onChange={(e) => setActionParams({
-                                                                ...actionParams,
-                                                                [actionKey]: {
-                                                                    ...(actionParams[actionKey] || {}),
-                                                                    [param.name]: param.type === 'number' ? Number(e.target.value) : e.target.value
-                                                                }
-                                                            })}
-                                                        />
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        )}
-                                    </div>
-                                )
-                            })}
-                        </div>
+                                            {action.parameters && action.parameters.length > 0 && (
+                                                <div className="space-y-1.5 bg-white rounded border border-slate-100 p-1.5">
+                                                    {action.parameters.map((param) => (
+                                                        <div key={param.name} className="flex items-center gap-2">
+                                                            <span className="text-[10px] text-slate-400 uppercase w-12 flex-shrink-0 text-right">{param.name}</span>
+                                                            <Input
+                                                                className="h-5 text-[10px] bg-slate-50 border-slate-100 px-1.5"
+                                                                placeholder={param.type}
+                                                                value={actionParams[actionKey]?.[param.name] ?? ''}
+                                                                onChange={(e) => setActionParams({
+                                                                    ...actionParams,
+                                                                    [actionKey]: {
+                                                                        ...(actionParams[actionKey] || {}),
+                                                                        [param.name]: param.type === 'number' ? Number(e.target.value) : e.target.value
+                                                                    }
+                                                                })}
+                                                            />
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+                                    )
+                                })}
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
-
-            {/* 编辑模式提示 */}
-            {editing && (
-                <div className="p-3 bg-yellow-50 border-t border-yellow-100">
-                    <p className="text-xs text-yellow-700">
-                        {t('components.instance.editingMode')}
-                    </p>
-                </div>
-            )}
         </div>
     )
 }

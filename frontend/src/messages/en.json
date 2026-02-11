@@ -538,7 +538,8 @@
       "noProperties": "No properties",
       "availableActions": "Available Actions",
       "execute": "Execute",
-      "editingMode": "Editing mode - Click save after modifying property values"
+      "editingMode": "Editing mode - Click save after modifying property values",
+      "selectNodeHint": "Select a node to view details"
     }
   },
   "toasts": {

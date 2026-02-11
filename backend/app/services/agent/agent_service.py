@@ -149,7 +149,7 @@ class EnhancedAgentService:
         # Initial thinking event
         yield {
             "type": "thinking",
-            "content": "正在分析您的请求...",
+            "content": "Analyzing user request...",
         }
 
         try:
@@ -206,11 +206,6 @@ class EnhancedAgentService:
                     # If this is a final answer (no tool calls), emit as content
                     if hasattr(ai_msg, "tool_calls") and not ai_msg.tool_calls:
                         content = ai_msg.content or ""
-                        # Skip if it's just our placeholder
-                        if "[注意：Action 执行功能将在 Phase 2 中实现]" in content:
-                            content = content.replace(
-                                "\n\n[注意：Action 执行功能将在 Phase 2 中实现]", ""
-                            )
 
                         if content:
                             yield {
@@ -228,7 +223,7 @@ class EnhancedAgentService:
                 elif kind == "on_tool_start":
                     yield {
                         "type": "thinking",
-                        "content": f"\n\n> **正在调用工具**: `{event['name']}`...\n",
+                        "content": f"\n\n> **Calling tool**: `{event['name']}`...\n",
                     }
 
                 # 4. Node markers (optional, for logging)
@@ -249,7 +244,7 @@ class EnhancedAgentService:
             logger.error(f"Error in astream_chat: {e}", exc_info=True)
             yield {
                 "type": "content",
-                "content": f"\n\n抱歉，处理请求时发生错误: {str(e)}",
+                "content": f"\n\nSorry, an error occurred: {str(e)}",
             }
         finally:
             try:
