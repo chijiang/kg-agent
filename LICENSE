@@ -1,0 +1,22 @@
+# KG-Agent Non-Commercial License
+
+Copyright (c) 2026 KG-Agent Contributors
+
+## 1. Permission and Scope
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to use, copy, modify, merge, and study the Software for personal, educational, and non-commercial research purposes only.
+
+## 2. Restrictions
+The following activities are strictly prohibited without prior written consent from the copyright holders:
+
+- **Commercial Use**: Using the Software, or any part of it, for any commercial purpose, including but not limited to:
+    - Selling, leasing, or renting the Software.
+    - Using the Software to provide commercial services (e.g., as part of a SaaS offering).
+    - Integrating the Software into a product that is sold or used for commercial gain.
+- **Derivative Works**: Creating derivative works of the Software and using those derivatives for any commercial purpose.
+- **Redistribution**: Redistributing the Software for commercial gain or as part of a commercial package.
+
+## 3. Commercial Inquiries
+For commercial licensing inquiries, please contact the project maintainers.
+
+## 4. No Warranty
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
