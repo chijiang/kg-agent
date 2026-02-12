@@ -45,6 +45,7 @@ class GraphEntity(Base):
         Boolean, default=True, index=True
     )  # True=实例数据, False=Schema节点
     properties = Column(JSONB, default=dict)  # 动态属性，JSONB 格式
+    source_id = Column(String(500), index=True)  # 外部数据源 ID
     uri = Column(String(1000))  # 原始 RDF URI（可选，用于追溯）
     created_at = Column(DateTime, server_default=func.now())
     updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())
@@ -70,6 +71,7 @@ class GraphEntity(Base):
         Index("idx_entities_type", "entity_type"),
         Index("idx_entities_is_instance", "is_instance"),
         Index("idx_entities_type_instance", "entity_type", "is_instance"),
+        Index("idx_entities_type_source", "entity_type", "source_id"),
     )
 
 

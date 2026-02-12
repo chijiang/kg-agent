@@ -199,7 +199,9 @@ class RuleEngine:
                 await repo.create(
                     type="RULE",
                     name=rule.name,
-                    entity_id=str(event.entity_id) if event.entity_id is not None else None,
+                    entity_id=(
+                        str(event.entity_id) if event.entity_id is not None else None
+                    ),
                     actor_name=event.actor_name,
                     actor_type=event.actor_type,
                     success=True,
@@ -228,7 +230,9 @@ class RuleEngine:
                 await repo.create(
                     type="RULE",
                     name=rule.name,
-                    entity_id=str(event.entity_id) if event.entity_id is not None else None,
+                    entity_id=(
+                        str(event.entity_id) if event.entity_id is not None else None
+                    ),
                     actor_name=event.actor_name,
                     actor_type=event.actor_type,
                     success=False,
@@ -283,18 +287,18 @@ class RuleEngine:
 
         try:
             result = await session.execute(text(sql_query))
-            records = result.fetchall()
+            records = result.mappings().all()
 
             logger.info(f"Found {len(records)} matching entities for rule")
 
             # For each matching entity, execute the statements
             for record in records:
-                # graph_entities columns: id(0), name(1), entity_type(2), is_instance(3), properties(4), uri(5), created_at(6), updated_at(7)
-                entity_id = record[0]  # id column
-                entity_name = record[1] if len(record) > 1 else None  # name column
-                raw_props = (
-                    record[4] if len(record) > 4 else {}
-                )  # properties JSONB column
+                # Access by column name
+                entity_id = record.get("id")
+                entity_name = record.get("name")
+                raw_props = record.get("properties") or {}
+                source_id = record.get("source_id")
+
                 # Parse JSON string to dict if needed
                 if isinstance(raw_props, str):
                     try:
@@ -303,9 +307,18 @@ class RuleEngine:
                         entity_props = {}
                 else:
                     entity_props = raw_props if raw_props else {}
-                # Include the entity name in props so ${e.name} resolves
-                if entity_name and "name" not in entity_props:
+
+                # Include basics in props for easy access in rules
+                if entity_name:
                     entity_props["name"] = entity_name
+                if source_id:
+                    entity_props["source_id"] = source_id
+                    # Also keep 'id' in props if it exists or for legacy compatibility
+                    # But the user wants to avoid confusion with internal ID
+                    # If we remove 'id' from properties in sync,
+                    # we should probably NOT put it back here under 'id' name
+                    # unless a rule specifically asks for it.
+                    # For now, let's follow the user's advice and call it source_id.
 
                 # Update scope with this variable's properties
                 current_scope = (scope or {}).copy()
@@ -441,7 +454,8 @@ class RuleEngine:
                     ARRAY[:prop_name]::text[],
                     CAST(:json_value AS jsonb)
                 )
-                WHERE (id = :entity_id OR name = :entity_id_str) AND entity_type = :entity_type
+                WHERE (id = :entity_id OR name = :entity_id_str OR source_id = :entity_id_str) 
+                AND entity_type = :entity_type
             """
             )
 

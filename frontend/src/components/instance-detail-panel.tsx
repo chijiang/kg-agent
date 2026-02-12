@@ -70,7 +70,7 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
             const props = data.properties || {}
             const filteredProps: Record<string, any> = {}
             Object.entries(props).forEach(([key, value]) => {
-                if (!key.startsWith('__')) {
+                if (!key.startsWith('__') && key !== 'id') {
                     filteredProps[key] = value
                 }
             })

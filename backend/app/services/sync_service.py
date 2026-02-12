@@ -210,10 +210,9 @@ class SyncService:
                                         )
 
                                     # ii. 转换属性
-                                    # 仅保留 ID 和 Name 字段（用于后续查找和关联）以及显式映射的字段
+                                    # 仅保留 Name 字段（用于后续查找和关联）以及显式映射的字段
+                                    # 注意：id 字段现在存在物理列 source_id 中，不再默认放入 properties
                                     properties = {}
-                                    if raw_id is not None:
-                                        properties[mapping.id_field_mapping] = raw_id
 
                                     raw_name = item.get(mapping.name_field_mapping)
                                     if raw_name is not None:
@@ -225,7 +224,13 @@ class SyncService:
                                     # 如果其他实体通过此字段关联到当前实体，我们需要保存该字段值
                                     for rel in mapping.target_relationship_mappings:
                                         # 避免覆盖已有的映射
-                                        if rel.target_id_field not in properties:
+                                        # 同时也避免重复添加主键字段（因为它已经存在 source_id 中）
+                                        if (
+                                            rel.target_id_field not in properties
+                                            and rel.target_id_field
+                                            != mapping.id_field_mapping
+                                            and rel.target_id_field != "id"
+                                        ):
                                             val = item.get(rel.target_id_field)
                                             if val is not None:
                                                 properties[rel.target_id_field] = val
@@ -259,12 +264,23 @@ class SyncService:
                                         properties[p_map.ontology_property] = val
 
                                     # iii. UPSERT GraphEntity
+                                    # 优先使用 source_id 进行查找，如果没定义 ID 映射则退而求其次使用 name
+                                    lookup_cond = []
+                                    if raw_id is not None:
+                                        lookup_cond.append(
+                                            GraphEntity.source_id == str(raw_id)
+                                        )
+                                    else:
+                                        lookup_cond.append(
+                                            GraphEntity.name == str(node_name)
+                                        )
+
                                     ent_result = await self.db.execute(
                                         select(GraphEntity).where(
                                             and_(
-                                                GraphEntity.name == str(node_name),
                                                 GraphEntity.entity_type
                                                 == mapping.ontology_class_name,
+                                                *lookup_cond,
                                             )
                                         )
                                     )
@@ -280,12 +296,23 @@ class SyncService:
                                             else {}
                                         )
                                         existing_props.update(properties)
+                                        # Remove redundant id if it was renamed to source_id column
+                                        if (
+                                            "id" in existing_props
+                                            and "id" not in properties
+                                        ):
+                                            del existing_props["id"]
                                         entity.properties = existing_props
                                         total_updated += 1
                                     else:
                                         new_entity = GraphEntity(
                                             name=str(node_name),
                                             entity_type=mapping.ontology_class_name,
+                                            source_id=(
+                                                str(raw_id)
+                                                if raw_id is not None
+                                                else None
+                                            ),
                                             is_instance=True,
                                             properties=properties,
                                         )
@@ -420,18 +447,14 @@ class SyncService:
                             continue
 
                         # 查找源节点 ID
-                        # 由于我们在第一步可能通过 name_field_mapping 修改了 name，
-                        # 查找最稳妥的方式是根据 properties 里的原始 ID 字段。
+                        # 查找最稳妥的方式是根据 source_id 列。
 
                         source_ent_res = await self.db.execute(
                             select(GraphEntity.id).where(
                                 and_(
                                     GraphEntity.entity_type
                                     == source_mapping.ontology_class_name,
-                                    GraphEntity.properties[
-                                        source_mapping.id_field_mapping
-                                    ].astext
-                                    == str(source_raw_id),
+                                    GraphEntity.source_id == str(source_raw_id),
                                 )
                             )
                         )
@@ -443,8 +466,7 @@ class SyncService:
                                 and_(
                                     GraphEntity.entity_type
                                     == target_mapping.ontology_class_name,
-                                    GraphEntity.properties[rm.target_id_field].astext
-                                    == str(fk_val),
+                                    GraphEntity.source_id == str(fk_val),
                                 )
                             )
                         )

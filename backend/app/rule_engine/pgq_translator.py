@@ -410,7 +410,15 @@ class PGQTranslator:
         attr = parts[1]
 
         # 基础列名直接访问
-        base_cols = {"id", "name", "entity_type", "is_instance", "uri", "properties"}
+        base_cols = {
+            "id",
+            "name",
+            "entity_type",
+            "is_instance",
+            "uri",
+            "properties",
+            "source_id",
+        }
         if attr in base_cols and len(parts) == 2:
             return f"{alias}.{attr}"
 

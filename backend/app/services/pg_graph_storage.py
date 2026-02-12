@@ -132,6 +132,7 @@ class PGGraphStorage:
             "id": entity.id,
             "name": entity.name,
             "entity_type": entity.entity_type,
+            "source_id": entity.source_id,
             "properties": {
                 k: v
                 for k, v in (entity.properties or {}).items()
@@ -541,6 +542,7 @@ class PGGraphStorage:
             {
                 "name": e.name,
                 "labels": [e.entity_type],
+                "source_id": e.source_id,
                 "aliases": (e.properties or {}).get("__aliases__", []),
                 "properties": {
                     k: v
@@ -558,6 +560,7 @@ class PGGraphStorage:
                 {
                     "id": r["name"],
                     "label": r["name"],
+                    "source_id": r["source_id"],
                     "aliases": r["aliases"],
                     "type": r["labels"][0] if r["labels"] else "Entity",
                     "properties": r["properties"],

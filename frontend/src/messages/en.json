@@ -54,7 +54,8 @@
     "by": "by",
     "with": "with",
     "as": "as",
-    "preview": "Preview"
+    "preview": "Preview",
+    "exit": "Exit"
   },
   "auth": {
     "login": "Login",
