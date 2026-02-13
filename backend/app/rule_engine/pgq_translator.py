@@ -710,7 +710,7 @@ class PGQueryBuilder:
 
         Args:
             start_node: 起始节点名称
-            direction: 方向 (outgoing/incoming/both)
+            direction: 方向 (both/outgoing/incoming)
             rel_types: 关系类型过滤
             hops: 跳数
 

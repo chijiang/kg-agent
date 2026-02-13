@@ -128,9 +128,9 @@ def create_action_tools(
         actions = action_registry.list_by_entity(entity_type)
 
         if not actions:
-            return f"类型 '{entity_type}' 没有可用的操作"
+            return f"No available actions for type '{entity_type}'"
 
-        output = [f"类型 '{entity_type}' 的可用操作:\n"]
+        output = [f"Available actions for type '{entity_type}':\n"]
         for action in actions:
             output.append(format_action_def(action))
             output.append("")  # Empty line between actions
@@ -150,7 +150,7 @@ def create_action_tools(
         action = action_registry.lookup(entity_type, action_name)
 
         if not action:
-            return f"未找到操作: {entity_type}.{action_name}"
+            return f"Action not found: {entity_type}.{action_name}"
 
         return format_action_def(action)
 
@@ -172,7 +172,7 @@ def create_action_tools(
         action = action_registry.lookup(entity_type, action_name)
 
         if not action:
-            return f"错误: 未找到操作 {entity_type}.{action_name}"
+            return f"Error: Action {entity_type}.{action_name} not found"
 
         # Get entity data
         try:
@@ -180,10 +180,10 @@ def create_action_tools(
                 entity_type, entity_id, get_session_func
             )
         except Exception as e:
-            return f"错误: 无法获取实体 '{entity_id}' 的数据: {str(e)}"
+            return f"Error: Unable to fetch data for entity '{entity_id}': {str(e)}"
 
         if not entity_data:
-            return f"错误: 未找到实体 '{entity_id}' (类型: {entity_type})"
+            return f"Error: Entity '{entity_id}' not found (Type: {entity_type})"
 
         # Create evaluation context
         session = None  # We won't execute, just validate
@@ -199,28 +199,30 @@ def create_action_tools(
 
         evaluator = ExpressionEvaluator(context)
 
-        output = [f"验证操作 {entity_type}.{action_name} 在实体 {entity_id} 上:\n"]
+        output = [
+            f"Validating action {entity_type}.{action_name} on entity {entity_id}:\n"
+        ]
 
         all_passed = True
         for i, precond in enumerate(action.preconditions or [], 1):
             try:
                 result = await evaluator.evaluate(precond.condition)
-                status = "✓ 通过" if result else "✗ 失败"
-                name = precond.name or f"前置条件 {i}"
+                status = "✓ Passed" if result else "✗ Failed"
+                name = precond.name or f"Precondition {i}"
                 output.append(f"  {i}. {name}: {status}")
                 if not result:
-                    output.append(f"     原因: {precond.on_failure}")
+                    output.append(f"     Reason: {precond.on_failure}")
                     all_passed = False
             except Exception as e:
                 output.append(
-                    f"  {i}. {precond.name or f'前置条件 {i}'}: ✗ 错误: {str(e)}"
+                    f"  {i}. {precond.name or f'Precondition {i}'}: ✗ Error: {str(e)}"
                 )
                 all_passed = False
 
         if all_passed:
-            output.append("\n结果: 所有前置条件通过，可以执行操作")
+            output.append("\nResult: All preconditions passed, action can be executed")
         else:
-            output.append("\n结果: 部分前置条件未通过，无法执行操作")
+            output.append("\nResult: Some preconditions failed, cannot execute action")
 
         return "\n".join(output)
 
@@ -251,10 +253,10 @@ def create_action_tools(
                 entity_type, entity_id, get_session_func
             )
         except Exception as e:
-            return f"错误: 无法获取实体 '{entity_id}' 的数据: {str(e)}"
+            return f"Error: Unable to fetch data for entity '{entity_id}': {str(e)}"
 
         if not entity_data:
-            return f"错误: 未找到实体 '{entity_id}' (类型: {entity_type})"
+            return f"Error: Entity '{entity_id}' not found (Type: {entity_type})"
 
         # Execute the action using the session from get_session_func
         session_cm = get_session_func()
@@ -275,9 +277,9 @@ def create_action_tools(
             if result.success:
                 await session.commit()
                 changes_str = ", ".join([f"{k}={v}" for k, v in result.changes.items()])
-                return f"操作 {entity_type}.{action_name} 在 {entity_id} 上执行成功\n变更: {changes_str}"
+                return f"Action {entity_type}.{action_name} executed successfully on {entity_id}\nChanges: {changes_str}"
             else:
-                return f"操作 {entity_type}.{action_name} 在 {entity_id} 上执行失败\n原因: {result.error}"
+                return f"Action {entity_type}.{action_name} failed on {entity_id}\nReason: {result.error}"
 
     async def batch_execute_action(
         entity_type: str,
@@ -302,10 +304,10 @@ def create_action_tools(
         params = params or {}
 
         if not entity_ids:
-            return "错误: 未提供实体 ID 列表"
+            return "Error: No entity IDs provided"
 
         output = [
-            f"批量执行 {entity_type}.{action_name} 在 {len(entity_ids)} 个实体上...\n",
+            f"Batch executing {entity_type}.{action_name} on {len(entity_ids)} entities...\n",
         ]
 
         # Import batch executor
@@ -333,28 +335,28 @@ def create_action_tools(
         )
 
         # Format results
-        output.append(f"总计: {results['total']}")
-        output.append(f"成功: {results['succeeded']}")
-        output.append(f"失败: {results['failed']}")
+        output.append(f"Total: {results.total}")
+        output.append(f"Succeeded: {results.succeeded}")
+        output.append(f"Failed: {results.failed}")
         output.append("")
 
-        if results["successes"]:
-            output.append("成功的实体:")
-            for success in results["successes"][:10]:  # Show first 10
+        if results.successes:
+            output.append("Successful entities:")
+            for success in results.successes[:10]:  # Show first 10
                 changes_str = ", ".join(
                     [f"{k}={v}" for k, v in success["changes"].items()]
                 )
                 output.append(f"  - {success['entity_id']}: {changes_str}")
-            if len(results["successes"]) > 10:
-                output.append(f"  ... 还有 {len(results['successes']) - 10} 个")
+            if len(results.successes) > 10:
+                output.append(f"  ... and {len(results.successes) - 10} more")
             output.append("")
 
-        if results["failures"]:
-            output.append("失败的实体:")
-            for failure in results["failures"][:10]:  # Show first 10
+        if results.failures:
+            output.append("Failed entities:")
+            for failure in results.failures[:10]:  # Show first 10
                 output.append(f"  - {failure['entity_id']}: {failure['error']}")
-            if len(results["failures"]) > 10:
-                output.append(f"  ... 还有 {len(results['failures']) - 10} 个")
+            if len(results.failures) > 10:
+                output.append(f"  ... and {len(results.failures) - 10} more")
 
         return "\n".join(output)
 
@@ -362,31 +364,32 @@ def create_action_tools(
         StructuredTool.from_function(
             coroutine=list_available_actions,
             name="list_available_actions",
-            description="列出实体类型可用的所有操作。返回操作名称、参数和前置条件。",
+            description="List all available actions for an entity type. Returns names, parameters, and preconditions.",
             args_schema=ListAvailableActionsInput,
         ),
         StructuredTool.from_function(
             coroutine=get_action_details,
             name="get_action_details",
-            description="获取特定操作的详细信息，包括所有前置条件。",
+            description="Get detailed information for a specific action, including all preconditions.",
             args_schema=GetActionDetailsInput,
         ),
-        StructuredTool.from_function(
-            coroutine=validate_action_preconditions,
-            name="validate_action_preconditions",
-            description="验证操作是否可以在实体上执行。检查所有前置条件。",
-            args_schema=ValidateActionPreconditionsInput,
-        ),
+        # 移除validate_action_preconditions工具，因为execute_action已经包含了前置条件校验
+        # StructuredTool.from_function(
+        #     coroutine=validate_action_preconditions,
+        #     name="validate_action_preconditions",
+        #     description="Validate if an action can be executed on an entity. Checks all preconditions.",
+        #     args_schema=ValidateActionPreconditionsInput,
+        # ),
         StructuredTool.from_function(
             coroutine=execute_action,
             name="execute_action",
-            description="在单个实体实例上执行操作。检查前置条件并在通过后执行。",
+            description="Execute an action on a single entity instance. Checks preconditions and executes if passed.",
             args_schema=ExecuteActionInput,
         ),
         StructuredTool.from_function(
             coroutine=batch_execute_action,
             name="batch_execute_action",
-            description="在多个实体上并发执行操作（批量操作推荐使用）。返回成功/失败汇总。",
+            description="Execute an action concurrently on multiple entities (preferred for bulk operations). Returns a summary of success/failure.",
             args_schema=BatchExecuteActionInput,
         ),
     ]

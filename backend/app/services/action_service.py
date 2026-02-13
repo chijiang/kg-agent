@@ -112,8 +112,12 @@ def format_action_as_dict(action: ActionDef) -> dict[str, Any]:
             for p in (action.parameters or [])
         ],
         "preconditions": [
-            {"condition": p.condition, "on_failure": p.on_failure}
-            for p in (action.preconditions or [])
+            {
+                "name": p.name or f"Check {i}",
+                "rule": _stringify_ast(p.condition),
+                "on_failure": p.on_failure,
+            }
+            for i, p in enumerate(action.preconditions or [], 1)
         ],
         "has_effect": action.effect is not None,
     }
@@ -129,6 +133,8 @@ def format_action_as_text(action: ActionDef) -> str:
         Formatted string representation
     """
     output = [f"Action: {action.entity_type}.{action.action_name}"]
+    if action.description:
+        output.append(f"  Description: {action.description}")
 
     # Parameters
     if action.parameters:
@@ -141,10 +147,13 @@ def format_action_as_text(action: ActionDef) -> str:
 
     # Preconditions
     if action.preconditions:
-        output.append("  Preconditions:")
+        output.append("  Preconditions (All must be true):")
         for i, precond in enumerate(action.preconditions, 1):
-            name = precond.name or f"Precondition {i}"
-            output.append(f"    {i}. {name}: {precond.on_failure}")
+            name = precond.name or f"Check {i}"
+            rule_str = _stringify_ast(precond.condition)
+            output.append(f"    {i}. {name}:")
+            output.append(f"       Rule: {rule_str}")
+            output.append(f"       Error Message if False: {precond.on_failure}")
     else:
         output.append("  Preconditions: None")
 
@@ -155,6 +164,68 @@ def format_action_as_text(action: ActionDef) -> str:
         output.append("  Effect: None (read-only)")
 
     return "\n".join(output)
+
+
+def _stringify_ast(ast: Any) -> str:
+    """Convert an AST node back into a DSL-like string for display.
+
+    This helps the LLM agent understand the underlying logic of
+    preconditions and rules instead of just seeing failure messages.
+    """
+    if ast is None:
+        return "null"
+    if isinstance(ast, str):
+        return f"'{ast}'"
+    if isinstance(ast, (int, float, bool)):
+        return str(ast)
+
+    if isinstance(ast, tuple):
+        if not ast:
+            return ""
+        op = ast[0]
+
+        # Comparison: (op, operator, left, right)
+        if op == "op" and len(ast) == 4:
+            return f"({_stringify_ast(ast[2])} {ast[1]} {_stringify_ast(ast[3])})"
+
+        # Logical: (and/or, left, right)
+        if op in ("and", "or") and len(ast) == 3:
+            return f"({_stringify_ast(ast[1])} {op.upper()} {_stringify_ast(ast[2])})"
+
+        # Not: (not, operand)
+        if op == "not" and len(ast) == 2:
+            return f"NOT {_stringify_ast(ast[1])}"
+
+        # Identifier: (id, path)
+        if op == "id" and len(ast) == 2:
+            return str(ast[1])
+
+        # IS NULL: (is_null, path, is_not)
+        if op == "is_null" and len(ast) == 3:
+            not_str = " NOT" if ast[2] else ""
+            path_str = _stringify_ast(ast[1])
+            return f"{path_str} IS{not_str} NULL"
+
+        # Call: (call, name, args)
+        if op == "call" and len(ast) >= 2:
+            name = ast[1]
+            args = ast[2] if len(ast) > 2 and ast[2] is not None else []
+            args_str = ", ".join([_stringify_ast(arg) for arg in args])
+            return f"{name}({args_str})"
+
+        # Exists: (exists, pattern)
+        if op == "exists":
+            return "EXISTS(...)"
+
+        # Node pattern (in exists): (node, var, type_name)
+        if op == "node" and len(ast) == 3:
+            type_suffix = f":{ast[2]}" if ast[2] else ""
+            return f"({ast[1]}{type_suffix})"
+
+    if isinstance(ast, list):
+        return "[" + ", ".join([_stringify_ast(i) for i in ast]) + "]"
+
+    return str(ast)
 
 
 # ---------------------------------------------------------------------------

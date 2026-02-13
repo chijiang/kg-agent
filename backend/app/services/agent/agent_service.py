@@ -13,6 +13,8 @@ from app.services.agent.state import AgentState, StreamEvent, UserIntent
 from app.services.agent.graph import create_agent_graph
 from app.services.agent_tools.query_tools import QueryToolRegistry
 from app.services.agent_tools.action_tools import ActionToolRegistry
+from app.services.agent.prompts import RECURSION_REVIEW_PROMPT
+from langgraph.errors import GraphRecursionError
 
 logger = logging.getLogger(__name__)
 
@@ -221,9 +223,24 @@ class EnhancedAgentService:
 
                 # 3. Tool execution start events
                 elif kind == "on_tool_start":
+                    tool_input = event["data"].get("input")
+                    input_str = ""
+                    if tool_input:
+                        import json
+
+                        try:
+                            # Format as pretty JSON for better readability in UI
+                            input_str = json.dumps(
+                                tool_input, ensure_ascii=False, indent=2
+                            )
+                            input_str = f"\n```json\n{input_str}\n```\n"
+                        except Exception:
+                            # Fallback if JSON serialization fails
+                            input_str = f" {tool_input}"
+
                     yield {
                         "type": "thinking",
-                        "content": f"\n\n> **Calling tool**: `{event['name']}`...\n",
+                        "content": f"\n\n> **Calling tool**: `{event['name']}`{input_str}...\n",
                     }
 
                 # 4. Node markers (optional, for logging)
@@ -240,6 +257,23 @@ class EnhancedAgentService:
                             "content": "\n\n",
                         }
 
+            # If we completed successfully, but messages were updated, we might want to capture those
+            # in the final state if we were tracing them.
+            # In LangGraph with tools, the messages are usually accumulated in the state.
+
+        except GraphRecursionError:
+            logger.warning("Recursion limit reached. Triggering agent self-review.")
+            yield {
+                "type": "thinking",
+                "content": "\n\n> **System notice**: Execution step limit reached. Analyzing progress for review...\n",
+            }
+
+            # messages should contain the conversation history so far
+            review_content = await self._generate_recursion_review(messages)
+            yield {
+                "type": "content",
+                "content": f"\n\n### Task Review (Execution Limit Reached)\n\n{review_content}",
+            }
         except Exception as e:
             logger.error(f"Error in astream_chat: {e}", exc_info=True)
             yield {
@@ -358,3 +392,42 @@ class EnhancedAgentService:
                 "precondition_count": len(action.preconditions or []),
             },
         }
+
+    async def _generate_recursion_review(self, messages: list) -> str:
+        """Generate an AI review of the execution history when a limit is reached.
+
+        Args:
+            messages: The list of messages (history) processed so far.
+
+        Returns:
+            Review summary string.
+        """
+        from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
+
+        history_parts = []
+        for i, m in enumerate(messages):
+            role = "Unknown"
+            if isinstance(m, HumanMessage):
+                role = "User"
+            elif isinstance(m, AIMessage):
+                role = "Assistant"
+            elif isinstance(m, ToolMessage):
+                role = f"Tool ({m.name})"
+
+            content = str(m.content)
+            # Truncate content if too long to avoid token limits in review
+            if len(content) > 1000:
+                content = content[:1000] + "... (truncated)"
+
+            history_parts.append(f"[{i}] {role}: {content}")
+
+        history_text = "\n".join(history_parts)
+
+        # Call LLM with the review prompt
+        try:
+            review_prompt = RECURSION_REVIEW_PROMPT.format(history=history_text)
+            response = await self.llm.ainvoke(review_prompt)
+            return response.content
+        except Exception as e:
+            logger.error(f"Error generating recursion review: {e}")
+            return f"I reached the execution limit and was unable to generate a detailed review. Please check the thinking process above for details on my last steps. Error: {str(e)}"

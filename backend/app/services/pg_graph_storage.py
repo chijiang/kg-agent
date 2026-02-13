@@ -132,7 +132,6 @@ class PGGraphStorage:
             "id": entity.id,
             "name": entity.name,
             "entity_type": entity.entity_type,
-            "source_id": entity.source_id,
             "properties": {
                 k: v
                 for k, v in (entity.properties or {}).items()
@@ -540,9 +539,9 @@ class PGGraphStorage:
 
         results = [
             {
+                "id": e.id,
                 "name": e.name,
                 "labels": [e.entity_type],
-                "source_id": e.source_id,
                 "aliases": (e.properties or {}).get("__aliases__", []),
                 "properties": {
                     k: v
@@ -560,7 +559,7 @@ class PGGraphStorage:
                 {
                     "id": r["name"],
                     "label": r["name"],
-                    "source_id": r["source_id"],
+                    "source_id": r.get("source_id"),
                     "aliases": r["aliases"],
                     "type": r["labels"][0] if r["labels"] else "Entity",
                     "properties": r["properties"],
@@ -677,6 +676,7 @@ class PGGraphStorage:
                 rel, entity = row
                 neighbors.append(
                     {
+                        "id": entity.id,
                         "name": entity.name,
                         "labels": [entity.entity_type],
                         "properties": {
@@ -734,6 +734,7 @@ class PGGraphStorage:
                 if entity:
                     neighbors.append(
                         {
+                            "id": entity.id,
                             "name": entity.name,
                             "labels": [entity.entity_type],
                             "properties": {
@@ -1053,7 +1054,7 @@ class PGGraphStorage:
             WHERE sp.depth < :max_depth
             AND NOT (CASE WHEN r.source_id = sp.current_id THEN r.target_id ELSE r.source_id END = ANY(sp.path_ids))
         )
-        SELECT path_names, path_labels, rel_types
+        SELECT path_names, path_labels, rel_types, path_ids
         FROM shortest_path
         WHERE path_names[array_length(path_names, 1)] = :end_name
         ORDER BY array_length(path_names, 1) ASC
@@ -1070,12 +1071,12 @@ class PGGraphStorage:
         if not row:
             return None
 
-        path_names, path_labels, rel_types = row
+        path_names, path_labels, rel_types, path_ids = row
 
         # 构建节点列表
         nodes = [
-            {"name": name, "labels": [label]}
-            for name, label in zip(path_names, path_labels)
+            {"id": node_id, "name": name, "labels": [label]}
+            for node_id, name, label in zip(path_ids, path_names, path_labels)
         ]
 
         # 构建关系列表
