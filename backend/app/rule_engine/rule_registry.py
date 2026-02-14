@@ -1,11 +1,9 @@
-"""Rule registry for managing rule definitions."""
-
 from typing import Any
-from pathlib import Path
-from app.rule_engine.models import RuleDef, Trigger, TriggerType
+from app.rule_engine.base_registry import BaseRegistry
+from app.rule_engine.models import RuleDef, Trigger
 
 
-class RuleRegistry:
+class RuleRegistry(BaseRegistry):
     """Registry for managing rule definitions.
 
     The rule registry stores RuleDef objects and provides lookup
@@ -14,6 +12,7 @@ class RuleRegistry:
 
     def __init__(self):
         """Initialize an empty registry."""
+        super().__init__()
         self._rules: dict[str, RuleDef] = {}
         self._trigger_index: dict[str, list[str]] = {}
 
@@ -74,37 +73,6 @@ class RuleRegistry:
         """
         return list(self._rules.values())
 
-    def load_from_file(self, file_path: str | Path) -> list[RuleDef]:
-        """Load rules from a DSL file.
-
-        Args:
-            file_path: Path to the DSL file
-
-        Returns:
-            List of loaded rule definitions
-
-        Raises:
-            FileNotFoundError: If the file doesn't exist
-            ValueError: If parsing fails
-        """
-        from app.rule_engine.parser import RuleParser
-
-        file_path = Path(file_path)
-        if not file_path.exists():
-            raise FileNotFoundError(f"Rule file not found: {file_path}")
-
-        parser = RuleParser()
-        parsed = parser.parse_file(str(file_path))
-
-        # Filter only RuleDef objects (exclude ActionDef)
-        rules = [item for item in parsed if isinstance(item, RuleDef)]
-
-        # Register each rule
-        for rule in rules:
-            self.register(rule)
-
-        return rules
-
     def clear(self) -> None:
         """Clear all registered rules."""
         self._rules.clear()
@@ -133,34 +101,23 @@ class RuleRegistry:
         return True
 
     def load_from_dsl(self, dsl_content: str) -> list[RuleDef]:
-        """Load rules from a DSL string.
+        """Alias for load_from_text for compatibility."""
+        parsed = self.load_from_text(dsl_content)
+        return [item for item in parsed if isinstance(item, RuleDef)]
+
+    def _register_parsed_items(self, parsed: list[Any]) -> None:
+        """Register RuleDef objects from parsed output.
 
         Args:
-            dsl_content: DSL content as a string
-
-        Returns:
-            List of loaded rule definitions
-
-        Raises:
-            ValueError: If parsing fails
+            parsed: List of parsed objects
         """
-        from app.rule_engine.parser import RuleParser
-
-        parser = RuleParser()
-        parsed = parser.parse(dsl_content)
-
-        # Filter only RuleDef objects (exclude ActionDef)
-        rules = [item for item in parsed if isinstance(item, RuleDef)]
-
-        # Register each rule
-        for rule in rules:
-            try:
-                self.register(rule)
-            except ValueError:
-                # Rule already registered, skip
-                pass
-
-        return rules
+        for item in parsed:
+            if isinstance(item, RuleDef):
+                try:
+                    self.register(item)
+                except ValueError:
+                    # Rule already registered, skip
+                    pass
 
     def _make_trigger_key(self, trigger: Trigger) -> str:
         """Create a key for trigger indexing.

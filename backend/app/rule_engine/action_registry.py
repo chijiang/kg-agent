@@ -1,23 +1,19 @@
-"""Action registry for storing and looking up ACTION definitions."""
-
-from pathlib import Path
 from typing import Any
+from app.rule_engine.base_registry import BaseRegistry
 from app.rule_engine.models import ActionDef
-from app.rule_engine.parser import RuleParser
 
 
-class ActionRegistry:
+class ActionRegistry(BaseRegistry):
     """Registry for ACTION definitions.
 
     The registry stores ActionDef objects and provides methods for
-    looking them up by entity type and action name. It can also load
-    actions from DSL files or text.
+    looking them up by entity type and action name.
     """
 
     def __init__(self):
         """Initialize an empty registry."""
+        super().__init__()
         self._actions: dict[tuple[str, str], ActionDef] = {}
-        self._parser = RuleParser()
 
     def register(self, action: ActionDef) -> None:
         """Register an ACTION definition.
@@ -66,31 +62,7 @@ class ActionRegistry:
         """
         return list(self._actions.values())
 
-    def load_from_file(self, file_path: str) -> None:
-        """Load actions from a DSL file.
-
-        Parses the DSL file and registers all ACTION definitions found.
-        RULE definitions are ignored.
-
-        Args:
-            file_path: Path to the DSL file
-        """
-        parsed = self._parser.parse_file(file_path)
-        self._register_actions_from_parsed(parsed)
-
-    def load_from_text(self, dsl_text: str) -> None:
-        """Load actions from DSL text.
-
-        Parses the DSL text and registers all ACTION definitions found.
-        RULE definitions are ignored.
-
-        Args:
-            dsl_text: DSL source text containing ACTION definitions
-        """
-        parsed = self._parser.parse(dsl_text)
-        self._register_actions_from_parsed(parsed)
-
-    def _register_actions_from_parsed(self, parsed: list[Any]) -> None:
+    def _register_parsed_items(self, parsed: list[Any]) -> None:
         """Register ActionDef objects from parsed output.
 
         Args:

@@ -40,7 +40,7 @@ class EvaluationContext:
 
         Paths can be:
         - "this.prop" -> entity["prop"] or entity["properties"]["prop"]
-        - "this.nested.prop" -> entity["nested"]["prop"]
+        - "e.prop" -> variables["e"]["prop"] (if 'e' is in variables)
         - "varName.prop" -> variables["varName"]["prop"]
 
         Args:
@@ -57,10 +57,13 @@ class EvaluationContext:
         root_name = parts[0]
         if root_name == "this":
             obj = self.entity
+        elif root_name in self.variables:
+            obj = self.variables[root_name]
         else:
-            obj = self.variables.get(root_name)
-            if obj is None:
-                return None
+            # Fallback: maybe it's a direct reference to a variable without a path
+            if len(parts) == 1:
+                return self.variables.get(root_name)
+            return None
 
         # Navigate through nested properties
         for i, part in enumerate(parts[1:]):
@@ -68,8 +71,8 @@ class EvaluationContext:
                 # Try direct access first
                 if part in obj:
                     obj = obj[part]
-                elif root_name == "this" and i == 0 and "properties" in obj:
-                    # If not found and it's the first level after 'this', check 'properties'
+                elif root_name in ("this", "e") and i == 0 and "properties" in obj:
+                    # If not found and it's a main entity, check 'properties'
                     props = obj["properties"]
                     if isinstance(props, dict) and part in props:
                         obj = props[part]

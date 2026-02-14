@@ -101,7 +101,23 @@ class ExpressionEvaluator:
         if op == "exists":
             return await self._evaluate_exists(ast[1])
 
+        # String interpolation: (format_str, [parts...])
+        if op == "format_str":
+            return await self._evaluate_format_str(ast[1])
+
         raise ValueError(f"Unknown AST node type: {op}")
+
+    async def _evaluate_format_str(self, parts: list) -> str:
+        """Evaluate string interpolation parts."""
+        result_parts = []
+        for part in parts:
+            if isinstance(part, str):
+                result_parts.append(part)
+            else:
+                # Part is an AST node (usually identifier)
+                resolved = await self.evaluate(part)
+                result_parts.append(str(resolved) if resolved is not None else "")
+        return "".join(result_parts)
 
     async def _evaluate_comparison(
         self, operator: str | None, left: Any, right: Any

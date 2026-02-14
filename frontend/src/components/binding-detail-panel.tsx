@@ -434,7 +434,7 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
 
                                             <div className="space-y-2">
                                                 <Label className="text-xs font-medium">获取数据方法 (List)</Label>
-                                                <Select onValueChange={(v) => setNewMapping({ ...newMapping, list_method: v })}>
+                                                <Select value={newMapping.list_method} onValueChange={(v) => setNewMapping({ ...newMapping, list_method: v })}>
                                                     <SelectTrigger className="h-9 bg-white">
                                                         <SelectValue placeholder="选择同步列表方法" />
                                                     </SelectTrigger>
@@ -444,6 +444,35 @@ export function BindingDetailPanel({ selection, onUpdate, onClose }: BindingDeta
                                                         ))}
                                                     </SelectContent>
                                                 </Select>
+                                            </div>
+
+                                            <div className="grid grid-cols-2 gap-3">
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-medium">主键字段 (PK)</Label>
+                                                    <Select value={newMapping.id_field_mapping} onValueChange={(v) => setNewMapping({ ...newMapping, id_field_mapping: v })}>
+                                                        <SelectTrigger className="h-9 bg-white">
+                                                            <SelectValue placeholder="选择主键字段" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {selectedProductSchema.message_types.find(mt => mt.name === newMapping.grpc_message_type)?.fields.map((f: any) => (
+                                                                <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-2">
+                                                    <Label className="text-xs font-medium">显示名称字段</Label>
+                                                    <Select value={newMapping.name_field_mapping} onValueChange={(v) => setNewMapping({ ...newMapping, name_field_mapping: v })}>
+                                                        <SelectTrigger className="h-9 bg-white">
+                                                            <SelectValue placeholder="选择名称字段" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            {selectedProductSchema.message_types.find(mt => mt.name === newMapping.grpc_message_type)?.fields.map((f: any) => (
+                                                                <SelectItem key={f.name} value={f.name}>{f.name}</SelectItem>
+                                                            ))}
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
                                             </div>
 
                                             <div className="grid grid-cols-2 gap-3 pt-2">

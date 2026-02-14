@@ -7,6 +7,7 @@ from app.rule_engine.models import ActionDef, SetStatement, CallStatement, Updat
 from app.rule_engine.context import EvaluationContext
 from app.rule_engine.evaluator import ExpressionEvaluator
 from app.rule_engine.event_emitter import GraphEventEmitter
+from app.rule_engine.persistence import PersistenceService
 
 
 @dataclass
@@ -106,15 +107,21 @@ class ActionExecutor:
 
         # Persist changes to database if any
         if changes and context.session:
-            await self._persist_changes(
-                entity_type,
-                context.entity["id"],
-                changes,
-                context.session,
-                context_entity=context.entity,
-                actor_name=actor_name,
-                actor_type=actor_type,
+            # Use PersistenceService to update properties safely via jsonb_set
+            success = await PersistenceService.update_properties(
+                context.session, entity_type, context.entity["id"], changes
             )
+
+            # Emit events for rule engine if persistence succeeded
+            if success and self.event_emitter:
+                self._emit_update_events(
+                    entity_type,
+                    context.entity["id"],
+                    changes,
+                    context_entity=context.entity,
+                    actor_name=actor_name,
+                    actor_type=actor_type,
+                )
 
         # Record execution log
         if context.session:
@@ -132,70 +139,6 @@ class ActionExecutor:
             )
 
         return ExecutionResult(success=True, error=None, changes=changes)
-
-    async def _persist_changes(
-        self,
-        entity_type: str,
-        entity_id: str,
-        changes: dict[str, Any],
-        session: Any,
-        context_entity: dict[str, Any] | None = None,
-        actor_name: str | None = None,
-        actor_type: str | None = None,
-    ):
-        """Persist property changes to PostgreSQL.
-
-        Args:
-            entity_type: Entity type/label
-            entity_id: Entity name property
-            changes: Dictionary of properties to update
-            session: Active PostgreSQL DB session
-            actor_name: Actor name for event emission
-            actor_type: Actor type for event emission
-        """
-        from sqlalchemy import update
-        from app.models.graph import GraphEntity
-
-        # Build the update query
-        # We need to merge changes with existing properties
-        # Note: We'll reconstruct the update based on found entity to be safe
-
-        # Execute query to get current entity, then update properties
-        from sqlalchemy import select
-
-        stmt = select(GraphEntity)
-        if isinstance(entity_id, int):
-            stmt = stmt.where(GraphEntity.id == entity_id)
-        else:
-            stmt = stmt.where(
-                GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type
-            )
-
-        result = await session.execute(stmt)
-        entity = result.scalar_one_or_none()
-
-        if entity:
-            # Merge properties
-            current_props = entity.properties or {}
-            merged_props = {**current_props, **changes}
-
-            # Update with merged properties using the primary key
-            await session.execute(
-                update(GraphEntity)
-                .where(GraphEntity.id == entity.id)
-                .values(properties=merged_props)
-            )
-
-        # Emit events for rule engine
-        if self.event_emitter:
-            self._emit_update_events(
-                entity_type,
-                entity_id,
-                changes,
-                context_entity=context_entity,
-                actor_name=actor_name,
-                actor_type=actor_type,
-            )
 
     def _emit_update_events(
         self,

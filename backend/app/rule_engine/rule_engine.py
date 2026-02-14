@@ -14,6 +14,9 @@ from app.rule_engine.models import (
     SetStatement,
     TriggerStatement,
 )
+from app.rule_engine.context import EvaluationContext
+from app.rule_engine.evaluator import ExpressionEvaluator
+from app.rule_engine.persistence import PersistenceService
 from app.rule_engine.pgq_translator import PGQTranslator
 from sqlalchemy import text
 
@@ -324,6 +327,15 @@ class RuleEngine:
                 current_scope = (scope or {}).copy()
                 current_scope[for_clause.variable] = entity_props
 
+                # Create evaluation context and evaluator for this iteration
+                eval_ctx = EvaluationContext(
+                    entity=entity_props,
+                    old_values={},  # We don't have old values here easily
+                    session=session,
+                    variables=current_scope,
+                )
+                evaluator = ExpressionEvaluator(eval_ctx)
+
                 # Execute each statement in the FOR clause
                 for stmt in for_clause.statements:
                     # Update bindings for this iteration
@@ -343,6 +355,7 @@ class RuleEngine:
                         event,
                         current_bindings,
                         current_scope,
+                        evaluator,
                     )
                     if executed:
                         statements_executed += 1
@@ -368,6 +381,7 @@ class RuleEngine:
         event: UpdateEvent,
         bindings: dict[str, tuple[str, str]],
         scope: dict[str, dict[str, Any]] | None = None,
+        evaluator: ExpressionEvaluator | None = None,
     ) -> bool:
         """Execute a single statement.
 
@@ -381,13 +395,21 @@ class RuleEngine:
             event: The original update event
             bindings: Current variable bindings
             scope: Variable properties from all scopes (var_name -> props dict)
+            evaluator: Expression evaluator
 
         Returns:
             True if statement executed successfully
         """
         if isinstance(stmt, SetStatement):
             return await self._execute_set_statement(
-                session, stmt, var, entity_type, entity_id, entity_props, scope
+                session,
+                stmt,
+                var,
+                entity_type,
+                entity_id,
+                entity_props,
+                scope,
+                evaluator,
             )
         elif isinstance(stmt, TriggerStatement):
             return await self._execute_trigger_statement(
@@ -412,6 +434,7 @@ class RuleEngine:
         entity_id: str,
         entity_props: dict[str, Any],
         scope: dict[str, dict[str, Any]] | None = None,
+        evaluator: ExpressionEvaluator | None = None,
     ) -> bool:
         """Execute a SET statement.
 
@@ -423,6 +446,7 @@ class RuleEngine:
             entity_id: Entity ID
             entity_props: Current entity properties
             scope: Variable properties from all scopes (var_name -> props dict)
+            evaluator: Expression evaluator
 
         Returns:
             True if successful
@@ -441,41 +465,31 @@ class RuleEngine:
             target_var, prop_name = parts
 
             # Evaluate the value with full scope for cross-variable references
-            evaluated_value = self._evaluate_value(value, entity_props, scope)
-
-            # Build and execute the update query for PostgreSQL
-            # Use jsonb_set(target, path, new_value)
-            # path is an array of text
-            update_query = text(
-                """
-                UPDATE graph_entities
-                SET properties = jsonb_set(
-                    COALESCE(properties, '{}'::jsonb),
-                    ARRAY[:prop_name]::text[],
-                    CAST(:json_value AS jsonb)
+            if evaluator:
+                evaluated_value = await evaluator.evaluate(value)
+            else:
+                # Fallback should not happen in rule engine rule execution
+                # but good for safety
+                eval_ctx = EvaluationContext(
+                    entity=entity_props,
+                    old_values={},
+                    session=session,
+                    variables=scope or {},
                 )
-                WHERE (id = :entity_id OR name = :entity_id_str OR source_id = :entity_id_str) 
-                AND entity_type = :entity_type
-            """
-            )
-
-            json_value = json.dumps(evaluated_value)
+                evaluator = ExpressionEvaluator(eval_ctx)
+                evaluated_value = await evaluator.evaluate(value)
 
             logger.info(f"Executing SET: {entity_id}.{prop_name} = {evaluated_value}")
 
-            await session.execute(
-                update_query,
-                {
-                    "entity_id": entity_id,
-                    "entity_id_str": str(entity_id),
-                    "entity_type": entity_type,
-                    "prop_name": prop_name,
-                    "json_value": json_value,
-                },
+            # Use PersistenceService to update the property safely
+            success = await PersistenceService.update_property(
+                session, entity_type, entity_id, prop_name, evaluated_value
             )
-            await session.commit()
 
-            return True
+            if success:
+                await session.commit()
+                return True
+            return False
 
         except Exception as e:
             logger.error(f"Error executing SET statement: {e}")
@@ -516,130 +530,3 @@ class RuleEngine:
         except Exception as e:
             logger.error(f"Error executing TRIGGER statement: {e}")
             return False
-
-    def _evaluate_value(
-        self,
-        value: Any,
-        entity_props: dict[str, Any],
-        scope: dict[str, dict[str, Any]] | None = None,
-    ) -> Any:
-        """Evaluate a value expression.
-
-        Args:
-            value: The value expression (could be literal or function call)
-            entity_props: Entity properties for variable resolution (current entity)
-            scope: Variable properties from all scopes (var_name -> props dict)
-
-        Returns:
-            Evaluated value
-        """
-        logger.debug(f"Evaluating value: {value} (type: {type(value).__name__})")
-
-        # Handle None
-        if value is None:
-            logger.debug("Value is None")
-            return None
-
-        # Handle numbers directly
-        if isinstance(value, (int, float)):
-            logger.debug(f"Value is number: {value}")
-            return value
-
-        # Handle booleans directly
-        if isinstance(value, bool):
-            logger.debug(f"Value is boolean: {value}")
-            return value
-
-        # Handle string literals
-        if isinstance(value, str):
-            # The parser already strips quotes, so this is a plain string
-            # Check if it's a property reference (e.g., "e.status")
-            if "." in value:
-                parts = value.split(".")
-                if len(parts) == 2:
-                    var_name, prop_name = parts
-                    # Try scope first for cross-variable resolution
-                    if scope and var_name in scope:
-                        prop_value = scope[var_name].get(prop_name)
-                        logger.debug(
-                            f"Value is scoped reference: {value} -> {prop_value}"
-                        )
-                        return prop_value
-                    if var_name in ("this", "e"):
-                        prop_value = entity_props.get(prop_name)
-                        logger.debug(
-                            f"Value is property reference: {value} -> {prop_value}"
-                        )
-                        return prop_value
-            # It's a plain string value
-            logger.debug(f"Value is plain string: {value}")
-            return value
-
-        # Handle function calls or identifiers (tuples like ("call", "NOW", []) or ("id", "var.prop"))
-        if isinstance(value, tuple):
-            if len(value) > 0:
-                # Handle string interpolation: ("format_str", [parts...])
-                if value[0] == "format_str":
-                    parts = value[1] if len(value) > 1 else []
-                    result_parts = []
-                    for part in parts:
-                        if isinstance(part, str):
-                            result_parts.append(part)
-                        else:
-                            # Resolve identifier or expression
-                            resolved = self._evaluate_value(part, entity_props, scope)
-                            result_parts.append(
-                                str(resolved) if resolved is not None else ""
-                            )
-                    return "".join(result_parts)
-
-                if value[0] == "call":
-                    func_name = value[1] if len(value) > 1 else ""
-                    args = value[2] if len(value) > 2 else []
-                    logger.debug(f"Value is function call: {func_name}({args})")
-
-                    if func_name.upper() == "NOW":
-                        from datetime import datetime
-
-                        return datetime.utcnow().isoformat()
-                    # Add more built-in functions as needed
-
-                elif value[0] == "id":
-                    path = value[1]
-                    # Resolve variable.property references
-                    if "." in path:
-                        parts = path.split(".")
-                        if len(parts) == 2:
-                            var_name, prop_name = parts
-                            # Try scope first for cross-variable resolution
-                            if scope and var_name in scope:
-                                prop_value = scope[var_name].get(prop_name)
-                                logger.debug(
-                                    f"Value is scoped identifier: {path} -> {prop_value}"
-                                )
-                                return prop_value
-                            # Fall back to entity_props
-                            prop_value = entity_props.get(prop_name)
-                            logger.debug(f"Value is identifier: {path} -> {prop_value}")
-                            return prop_value
-                    return path
-
-            # Handle other tuple types (AST nodes)
-            logger.debug(f"Value is unknown tuple: {value}")
-            return None
-
-        # Handle lists
-        if isinstance(value, list):
-            logger.debug(f"Value is list: {value}")
-            return [self._evaluate_value(item, entity_props, scope) for item in value]
-
-        logger.warning(f"Unknown value type: {type(value).__name__} = {value}")
-        return value
-
-    def _execute_rule(self, rule: RuleDef, event: UpdateEvent) -> dict[str, Any] | None:
-        """Deprecated: Use _execute_rule_async instead."""
-        return {
-            "rule": rule.name,
-            "error": "Synchronous execution not supported",
-            "success": False,
-        }

@@ -200,8 +200,6 @@ class SyncService:
                                 try:
                                     # i. 提取元数据
                                     raw_id = item.get(mapping.id_field_mapping)
-                                    if raw_id is None:
-                                        raw_id = item.get("id")
 
                                     node_name = item.get(mapping.name_field_mapping)
                                     if not node_name:
