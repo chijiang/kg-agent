@@ -1282,7 +1282,7 @@ class PGGraphStorage:
 
         # 添加实体类型过滤
         if accessible_entity_types is not None and accessible_entity_types:
-            query = query.where(GraphEntity.type.in_(accessible_entity_types))
+            query = query.where(GraphEntity.entity_type.in_(accessible_entity_types))
 
         query = query.order_by(func.random()).limit(limit)
         result = await self.db.execute(query)

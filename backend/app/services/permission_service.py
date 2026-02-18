@@ -128,7 +128,7 @@ class PermissionService:
             # 从GraphEntity表获取所有类名
             from app.models.graph import GraphEntity
             result = await db.execute(
-                select(GraphEntity.type).distinct()
+                select(GraphEntity.entity_type).distinct()
             )
             return list({row[0] for row in result.all() if row[0]})
 
