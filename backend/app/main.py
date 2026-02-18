@@ -14,6 +14,7 @@ from app.api import (
     data_products,
     data_mappings,
     users,
+    roles,
 )
 from app.core.database import engine, Base, async_session
 import app.models  # Implicitly registers models
@@ -153,6 +154,7 @@ app.include_router(rules.router)
 app.include_router(data_products.router)
 app.include_router(data_mappings.router)
 app.include_router(users.router)
+app.include_router(roles.router)
 
 
 @app.get("/health")
