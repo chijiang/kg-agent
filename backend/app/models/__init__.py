@@ -18,6 +18,13 @@ from app.models.data_product import (
     ConnectionStatus,
     SyncDirection,
 )
+from app.models.role import (
+    Role,
+    UserRole,
+    RolePagePermission,
+    RoleActionPermission,
+    RoleEntityPermission,
+)
 
 __all__ = [
     "User",
@@ -37,4 +44,9 @@ __all__ = [
     "SyncLog",
     "ConnectionStatus",
     "SyncDirection",
+    "Role",
+    "UserRole",
+    "RolePagePermission",
+    "RoleActionPermission",
+    "RoleEntityPermission",
 ]
