@@ -517,3 +517,168 @@ export const dataMappingsApi = {
   deleteRelationshipMapping: (id: number) =>
     api.delete(`/data-mappings/relationship-mappings/${id}`),
 }
+
+
+// ============================================================================
+// Multi-Role System Types
+// ============================================================================
+
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected'
+export type PageId = 'chat' | 'rules' | 'actions' | 'data-products' | 'ontology' | 'admin'
+
+export interface UserRole {
+  id: number
+  user_id: number
+  role_id: number
+  assigned_by: number | null
+  assigned_at: string
+}
+
+export interface Role {
+  id: number
+  name: string
+  description: string | null
+  is_system: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface RoleDetail extends Role {
+  page_permissions: string[]
+  action_permissions: Array<{ entity_type: string; action_name: string }>
+  entity_permissions: string[]
+}
+
+export interface User {
+  id: number
+  username: string
+  email: string | null
+  is_admin: boolean
+  approval_status: ApprovalStatus
+  approval_note: string | null
+  is_password_changed: boolean
+  created_at: string
+}
+
+export interface UserListResponse {
+  items: User[]
+  total: number
+}
+
+export interface PermissionCache {
+  accessible_pages: string[]
+  accessible_actions: Record<string, string[]>
+  accessible_entities: string[]
+  is_admin: boolean
+}
+
+export interface ResetPasswordResponse {
+  message: string
+  default_password: string
+}
+
+// ============================================================================
+// Multi-Role System API
+// ============================================================================
+
+export const usersApi = {
+  // 获取用户列表
+  list: (params?: { skip?: number; limit?: number; approval_status?: string; search?: string }) =>
+    api.get<UserListResponse>('/api/users', { params }),
+
+  // 创建用户
+  create: (data: { username: string; password: string; email?: string }) =>
+    api.post<User>('/api/users', data),
+
+  // 更新用户
+  update: (userId: number, data: { email?: string; is_active?: boolean }) =>
+    api.put<User>(`/api/users/${userId}`, data),
+
+  // 删除用户
+  delete: (userId: number) =>
+    api.delete(`/api/users/${userId}`),
+
+  // 获取待审批用户列表
+  getPendingApprovals: () =>
+    api.get<UserListResponse>('/api/users/pending-approvals'),
+
+  // 审批通过
+  approve: (userId: number, note?: string) =>
+    api.post(`/api/users/${userId}/approve`, { note }),
+
+  // 审批拒绝
+  reject: (userId: number, reason: string) =>
+    api.post(`/api/users/${userId}/reject`, { reason }),
+
+  // 重置密码
+  resetPassword: (userId: number) =>
+    api.post<ResetPasswordResponse>(`/api/users/${userId}/reset-password`),
+
+  // 分配角色
+  assignRole: (userId: number, roleId: number) =>
+    api.post(`/api/users/${userId}/roles`, { role_id: roleId }),
+
+  // 移除角色
+  removeRole: (userId: number, roleId: number) =>
+    api.delete(`/api/users/${userId}/roles/${roleId}`),
+
+  // 获取当前用户权限
+  getMyPermissions: () =>
+    api.get<PermissionCache>('/api/users/me/permissions'),
+
+  // 修改密码
+  changePassword: (oldPassword: string, newPassword: string) =>
+    api.post('/auth/change-password', { old_password: oldPassword, new_password: newPassword }),
+}
+
+export const rolesApi = {
+  // 获取所有角色
+  list: () =>
+    api.get<Role[]>('/api/roles'),
+
+  // 获取角色详情
+  get: (roleId: number) =>
+    api.get<RoleDetail>(`/api/roles/${roleId}`),
+
+  // 创建角色
+  create: (data: { name: string; description?: string }) =>
+    api.post<Role>('/api/roles', data),
+
+  // 更新角色
+  update: (roleId: number, data: { name?: string; description?: string }) =>
+    api.put<Role>(`/api/roles/${roleId}`, data),
+
+  // 删除角色
+  delete: (roleId: number) =>
+    api.delete(`/api/roles/${roleId}`),
+
+  // 页面权限
+  getPagePermissions: (roleId: number) =>
+    api.get<string[]>(`/api/roles/${roleId}/permissions/pages`),
+
+  addPagePermission: (roleId: number, pageId: string) =>
+    api.post(`/api/roles/${roleId}/permissions/pages`, { page_id: pageId }),
+
+  removePagePermission: (roleId: number, pageId: string) =>
+    api.delete(`/api/roles/${roleId}/permissions/pages/${pageId}`),
+
+  // Action权限
+  getActionPermissions: (roleId: number) =>
+    api.get<Array<{ entity_type: string; action_name: string }>>(`/api/roles/${roleId}/permissions/actions`),
+
+  addActionPermission: (roleId: number, entityType: string, actionName: string) =>
+    api.post(`/api/roles/${roleId}/permissions/actions`, { entity_type: entityType, action_name: actionName }),
+
+  removeActionPermission: (roleId: number, entityType: string, actionName: string) =>
+    api.delete(`/api/roles/${roleId}/permissions/actions/${entityType}/${actionName}`),
+
+  // 实体类型权限
+  getEntityPermissions: (roleId: number) =>
+    api.get<string[]>(`/api/roles/${roleId}/permissions/entities`),
+
+  addEntityPermission: (roleId: number, entityClassName: string) =>
+    api.post(`/api/roles/${roleId}/permissions/entities`, { entity_class_name: entityClassName }),
+
+  removeEntityPermission: (roleId: number, entityClassName: string) =>
+    api.delete(`/api/roles/${roleId}/permissions/entities/${entityClassName}`),
+}
