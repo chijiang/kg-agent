@@ -10,6 +10,7 @@ from app.rule_engine.action_registry import ActionRegistry
 from app.rule_engine.action_executor import ActionExecutor
 from app.rule_engine.context import EvaluationContext
 from app.services.pg_graph_storage import PGGraphStorage
+from app.services.permission_service import PermissionService
 from app.rule_engine.parser import RuleParser
 from app.rule_engine.models import ActionDef, CallStatement
 from app.api.deps import get_current_user
@@ -129,8 +130,14 @@ async def execute_action(
         Execution result with success status and changes
 
     Raises:
-        HTTPException: If action is not found
+        HTTPException: If action is not found or user lacks permission
     """
+    # 检查权限
+    has_permission = await PermissionService.check_action_permission(
+        db, current_user, entity_type, action_name
+    )
+    if not has_permission:
+        raise HTTPException(status_code=403, detail="No permission to execute this action")
     # Create evaluation context
     # Build entity dict with id and data
 
@@ -515,6 +522,7 @@ async def list_entity_actions(
     entity_type: str,
     current_user: User = Depends(get_current_user),
     registry: ActionRegistry = Depends(get_action_registry),
+    db: AsyncSession = Depends(get_db),
 ) -> dict[str, Any]:
     """List all actions for a specific entity type.
 
@@ -522,14 +530,26 @@ async def list_entity_actions(
         entity_type: The entity type to filter by
         current_user: Current authenticated user
         registry: Action registry instance
+        db: Database session
 
     Returns:
-        Dictionary with list of actions for the entity type
+        Dictionary with list of actions for the entity type (filtered by permissions)
     """
+    # 获取用户可执行的actions
+    user_actions = await PermissionService.get_accessible_actions(db, current_user)
+
+    # 获取该实体类型的所有actions
     actions = registry.list_by_entity(entity_type)
+
+    # 获取用户对该实体类型有权限的actions
+    allowed_actions = user_actions.get(entity_type, []) if not current_user.is_admin else []
 
     action_infos = []
     for action in actions:
+        # 如果不是admin且用户没有该action权限，跳过
+        if not current_user.is_admin and action.action_name not in allowed_actions:
+            continue
+
         # Check if effect contains CALL statements
         _has_call = False
         if action.effect and hasattr(action.effect, "statements"):
