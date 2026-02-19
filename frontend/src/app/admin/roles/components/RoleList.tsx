@@ -14,7 +14,7 @@ export function RoleList() {
     async function loadRoles() {
       try {
         const data = await rolesApi.list()
-        setRoles(data)
+        setRoles(data.data)
       } catch (error) {
         console.error('Failed to load roles:', error)
       } finally {

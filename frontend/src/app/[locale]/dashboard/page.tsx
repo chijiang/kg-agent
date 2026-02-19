@@ -1,4 +1,3 @@
-// frontend/src/app/dashboard/page.tsx
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
@@ -13,6 +12,7 @@ import { conversationApi, Message } from '@/lib/api'
 import { MessageSquare, Network, PanelLeftClose, PanelLeft, Sparkles, ListTodo } from 'lucide-react'
 import { Switch } from '@/components/ui/switch'
 import { Label } from '@/components/ui/label'
+import { ProtectedPage } from '@/components/auth/ProtectedPage'
 
 export default function DashboardPage() {
   const router = useRouter()
@@ -76,84 +76,86 @@ export default function DashboardPage() {
   }
 
   return (
-    <AppLayout noPadding>
-      <div className="flex flex-1 h-full overflow-hidden relative">
-        {/* Toggle sidebar button (Floating when closed) */}
-        {!sidebarOpen && (
-          <button
-            onClick={() => setSidebarOpen(true)}
-            className="absolute left-4 top-4 z-20 p-2.5 bg-white border border-slate-200/60 rounded-xl shadow-lg shadow-slate-200/50 hover:bg-slate-50 transition-all text-slate-400 hover:text-primary group"
-            title={t('layout.showSidebar')}
-          >
-            <PanelLeft className="h-4 w-4 transition-transform group-hover:scale-110" />
-            <div className="absolute -right-1 -top-1 w-2 h-2 bg-primary rounded-full border-2 border-white" />
-          </button>
-        )}
+    <ProtectedPage pageId="chat">
+      <AppLayout noPadding>
+        <div className="flex flex-1 h-full overflow-hidden relative">
+          {/* Toggle sidebar button (Floating when closed) */}
+          {!sidebarOpen && (
+            <button
+              onClick={() => setSidebarOpen(true)}
+              className="absolute left-4 top-4 z-20 p-2.5 bg-white border border-slate-200/60 rounded-xl shadow-lg shadow-slate-200/50 hover:bg-slate-50 transition-all text-slate-400 hover:text-primary group"
+              title={t('layout.showSidebar')}
+            >
+              <PanelLeft className="h-4 w-4 transition-transform group-hover:scale-110" />
+              <div className="absolute -right-1 -top-1 w-2 h-2 bg-primary rounded-full border-2 border-white" />
+            </button>
+          )}
 
-        {/* Sidebar */}
-        <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 overflow-hidden h-full`}>
-          <ConversationSidebar
-            activeId={activeConversationId}
-            onSelect={loadConversation}
-            onNewChat={handleNewChat}
-            onToggle={() => setSidebarOpen(false)}
-          />
-        </div>
+          {/* Sidebar */}
+          <div className={`transition-all duration-300 ease-in-out ${sidebarOpen ? 'w-64' : 'w-0'} flex-shrink-0 overflow-hidden h-full`}>
+            <ConversationSidebar
+              activeId={activeConversationId}
+              onSelect={loadConversation}
+              onNewChat={handleNewChat}
+              onToggle={() => setSidebarOpen(false)}
+            />
+          </div>
 
-        {/* Main content */}
-        <div className="flex-1 min-h-0 bg-slate-50 p-4 lg:p-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-hidden">
-            {/* Q&A area */}
-            <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden h-full min-h-0">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-slate-50/30 flex-shrink-0">
-                <div className="p-2 rounded-lg bg-primary">
-                  <MessageSquare className="h-5 w-5 text-white" />
-                </div>
-                <h2 className="text-lg font-semibold text-slate-800">{t('dashboard.title')}</h2>
-                <div className="ml-auto flex items-center space-x-2">
-                  <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-full border border-slate-200">
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'llm' ? 'bg-white text-primary font-medium shadow-sm' : 'text-slate-500'}`}>
-                      {t('dashboard.mode.model')}
-                    </span>
-                    <Switch
-                      id="mode-switch"
-                      checked={mode === 'non-llm'}
-                      onCheckedChange={(checked: boolean) => setMode(checked ? 'non-llm' : 'llm')}
-                      className="data-[state=checked]:bg-orange-500 data-[state=unchecked]:bg-primary"
-                    />
-                    <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'non-llm' ? 'bg-white text-orange-600 font-medium shadow-sm' : 'text-slate-500'}`}>
-                      {t('dashboard.mode.instr')}
-                    </span>
+          {/* Main content */}
+          <div className="flex-1 min-h-0 bg-slate-50 p-4 lg:p-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 h-full overflow-hidden">
+              {/* Q&A area */}
+              <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden h-full min-h-0">
+                <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-slate-50/30 flex-shrink-0">
+                  <div className="p-2 rounded-lg bg-primary">
+                    <MessageSquare className="h-5 w-5 text-white" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-slate-800">{t('dashboard.title')}</h2>
+                  <div className="ml-auto flex items-center space-x-2">
+                    <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-full border border-slate-200">
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'llm' ? 'bg-white text-primary font-medium shadow-sm' : 'text-slate-500'}`}>
+                        {t('dashboard.mode.model')}
+                      </span>
+                      <Switch
+                        id="mode-switch"
+                        checked={mode === 'non-llm'}
+                        onCheckedChange={(checked: boolean) => setMode(checked ? 'non-llm' : 'llm')}
+                        className="data-[state=checked]:bg-orange-500 data-[state=unchecked]:bg-primary"
+                      />
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${mode === 'non-llm' ? 'bg-white text-orange-600 font-medium shadow-sm' : 'text-slate-500'}`}>
+                        {t('dashboard.mode.instr')}
+                      </span>
+                    </div>
                   </div>
                 </div>
-              </div>
-              <div className="flex-1 min-h-0">
-                <Chat
-                  onGraphData={setGraphData}
-                  conversationId={activeConversationId}
-                  initialMessages={initialMessages}
-                  onConversationCreated={handleConversationCreated}
-                  mode={mode}
-                  onModeChange={setMode}
-                />
-              </div>
-            </div>
-
-            {/* Graph area */}
-            <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden h-full min-h-0">
-              <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-slate-50/30 flex-shrink-0">
-                <div className="p-2 rounded-lg bg-primary/10">
-                  <Network className="h-5 w-5 text-primary" />
+                <div className="flex-1 min-h-0">
+                  <Chat
+                    onGraphData={setGraphData}
+                    conversationId={activeConversationId}
+                    initialMessages={initialMessages}
+                    onConversationCreated={handleConversationCreated}
+                    mode={mode}
+                    onModeChange={setMode}
+                  />
                 </div>
-                <h2 className="text-lg font-semibold text-slate-800">{t('dashboard.graphPreview')}</h2>
               </div>
-              <div className="flex-1 min-h-0">
-                <GraphPreview data={graphData} />
+
+              {/* Graph area */}
+              <div className="flex flex-col bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden h-full min-h-0">
+                <div className="flex items-center gap-2 px-5 py-4 border-b border-slate-100 bg-slate-50/30 flex-shrink-0">
+                  <div className="p-2 rounded-lg bg-primary/10">
+                    <Network className="h-5 w-5 text-primary" />
+                  </div>
+                  <h2 className="text-lg font-semibold text-slate-800">{t('dashboard.graphPreview')}</h2>
+                </div>
+                <div className="flex-1 min-h-0">
+                  <GraphPreview data={graphData} />
+                </div>
               </div>
             </div>
           </div>
         </div>
-      </div>
-    </AppLayout>
+      </AppLayout>
+    </ProtectedPage>
   )
 }

@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation'
 import { useLocale, useTranslations } from 'next-intl'
 import { useMemo, useState, useEffect } from 'react'
 import { useAuthStore } from '@/lib/auth'
+import { usePermissions } from '@/hooks/usePermissions'
 import { LanguageSwitcher } from '@/components/language-switcher'
 import {
   Database,
@@ -24,6 +25,7 @@ import {
 } from 'lucide-react'
 
 export function AppLayout({ children, noPadding = false }: { children: React.ReactNode, noPadding?: boolean }) {
+  const { permissions, loading: loadingPermissions, hasPageAccess } = usePermissions() // Ensure permissions are loaded globally
   const pathname = usePathname()
   const router = useRouter()
   const locale = useLocale()
@@ -49,28 +51,32 @@ export function AppLayout({ children, noPadding = false }: { children: React.Rea
     logout()
     router.push(`/${locale}`)
   }
+  // ... (existing code)
 
   const navItems = useMemo(() => {
     const items = [
-      { href: `/${locale}/dashboard`, label: t('nav.qa'), icon: Sparkles },
-      { href: `/${locale}/graph/management`, label: t('nav.ontology'), icon: Network },
-      { href: `/${locale}/graph/instances`, label: t('nav.instances'), icon: CircleDot },
-      { href: `/${locale}/data-products`, label: t('nav.dataProducts'), icon: Package },
-      { href: `/${locale}/rules`, label: t('nav.rules'), icon: Scale },
-      { href: `/${locale}/graph/import`, label: t('nav.importGraph'), icon: Database },
-      { href: `/${locale}/config`, label: t('nav.config'), icon: Settings },
+      { id: 'chat', href: `/${locale}/dashboard`, label: t('nav.qa'), icon: Sparkles },
+      { id: 'ontology', href: `/${locale}/graph/management`, label: t('nav.ontology'), icon: Network },
+      { id: 'instances', href: `/${locale}/graph/instances`, label: t('nav.instances'), icon: CircleDot },
+      { id: 'data-products', href: `/${locale}/data-products`, label: t('nav.dataProducts'), icon: Package },
+      { id: 'rules', href: `/${locale}/rules`, label: t('nav.rules'), icon: Scale },
+      { id: 'import', href: `/${locale}/graph/import`, label: t('nav.importGraph'), icon: Database },
+      { id: 'config', href: `/${locale}/config`, label: t('nav.config'), icon: Settings },
     ]
 
+    // Filter items based on permissions
+    const filteredItems = items.filter(item => hasPageAccess(item.id))
+
     // Only show admin links to admin users
-    if (user?.is_admin) {
-      items.push(
-        { href: `/${locale}/admin/users`, label: '用户管理', icon: Users },
-        { href: `/${locale}/admin/roles`, label: '角色管理', icon: Shield }
+    if (user?.is_admin || permissions?.is_admin) {
+      filteredItems.push(
+        { id: 'admin_users', href: `/${locale}/admin/users`, label: '用户管理', icon: Users },
+        { id: 'admin_roles', href: `/${locale}/admin/roles`, label: '角色管理', icon: Shield }
       )
     }
 
-    return items
-  }, [locale, t, user])
+    return filteredItems
+  }, [locale, t, user, permissions, hasPageAccess])
 
   return (
     <div className="flex h-screen bg-slate-50/50 overflow-hidden">

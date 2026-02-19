@@ -5,6 +5,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
 import { AppLayout } from '@/components/layout'
+import { ProtectedPage } from '@/components/auth/ProtectedPage'
 import { SchemaViewer } from '@/components/schema-viewer'
 import { OntologyDetailPanel } from '@/components/ontology-detail-panel'
 import { BindingDetailPanel } from '@/components/binding-detail-panel'
@@ -157,207 +158,210 @@ export default function OntologyManagementPage() {
     }
 
     return (
-        <AppLayout>
-            <div className="flex flex-col h-[calc(100vh-120px)] gap-3">
-                <div className="flex justify-between items-center">
-                    <div className="flex items-center gap-3">
-                        <h2 className="text-lg font-semibold text-slate-800">{t('graph.ontology.title')}</h2>
-                        {isEditMode && relStep !== 'IDLE' && (
-                            <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
-                                <Info className="w-3 h-3" />
-                                <span>
-                                    {relStep === 'SOURCE' && t('graph.ontology.stepSource')}
-                                    {relStep === 'TARGET' && t('graph.ontology.stepTarget')}
-                                    {relStep === 'TYPE' && t('graph.ontology.stepType')}
-                                </span>
-                                <button onClick={cancelRelCreation} className="ml-1 text-blue-500 hover:text-blue-700 text-xs underline">{t('common.cancel')}</button>
-                            </div>
-                        )}
-                        {isMappingMode && (
-                            <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
-                                <Info className="w-3 h-3" />
-                                <span>{t('graph.binding.info')}</span>
-                            </div>
-                        )}
-                    </div>
-                    <div className="flex gap-1.5">
-                        {isEditMode && relStep === 'IDLE' && (
-                            <>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
-                                    onClick={() => setIsAddClassOpen(true)}
-                                >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    {t('graph.ontology.addClass')}
-                                </Button>
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
-                                    onClick={startAddRel}
-                                >
-                                    <Plus className="w-3 h-3 mr-1" />
-                                    {t('graph.ontology.addRelationship')}
-                                </Button>
-                            </>
-                        )}
-                        <Button
-                            size="sm"
-                            variant={isEditMode ? "default" : "outline"}
-                            onClick={toggleEditMode}
-                            className={`h-7 text-xs ${isEditMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
-                        >
-                            {isEditMode ? <Eye className="w-3 h-3 mr-1" /> : <Edit3 className="w-3 h-3 mr-1" />}
-                            {isEditMode ? t('graph.ontology.exitEditMode') : t('graph.ontology.editMode')}
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant={isMappingMode ? "default" : "outline"}
-                            onClick={toggleMappingMode}
-                            className={`h-7 text-xs ${isMappingMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
-                        >
-                            <LinkIcon className="w-3 h-3 mr-1" />
-                            {isMappingMode ? t('common.exit') : t('graph.ontology.dataMapping')}
-                        </Button>
-                        <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={handleExport}
-                            disabled={isExporting}
-                            className="h-7 text-xs border-slate-200"
-                        >
-                            {isExporting ? (
-                                <Loader2 className="w-3 h-3 mr-1 animate-spin" />
-                            ) : (
-                                <Download className="w-3 h-3 mr-1" />
+        <ProtectedPage pageId="ontology">
+            <AppLayout>
+                <div className="flex flex-col h-[calc(100vh-120px)] gap-3">
+                    {/* ... (existing content) ... */}
+                    <div className="flex justify-between items-center">
+                        <div className="flex items-center gap-3">
+                            <h2 className="text-lg font-semibold text-slate-800">{t('graph.ontology.title')}</h2>
+                            {isEditMode && relStep !== 'IDLE' && (
+                                <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
+                                    <Info className="w-3 h-3" />
+                                    <span>
+                                        {relStep === 'SOURCE' && t('graph.ontology.stepSource')}
+                                        {relStep === 'TARGET' && t('graph.ontology.stepTarget')}
+                                        {relStep === 'TYPE' && t('graph.ontology.stepType')}
+                                    </span>
+                                    <button onClick={cancelRelCreation} className="ml-1 text-blue-500 hover:text-blue-700 text-xs underline">{t('common.cancel')}</button>
+                                </div>
                             )}
-                            {t('graph.ontology.exportTTL')}
-                        </Button>
-                    </div>
-                </div>
-                <div className="flex-1 min-h-0">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
-                        {/* Left: Ontology Graph */}
-                        <div className={`bg-white rounded-lg border border-slate-200 overflow-hidden ${selection ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
-                            <SchemaViewer
-                                key={refreshKey}
-                                isEditMode={isEditMode && !isMappingMode}
-                                activeStep={relStep}
-                                sourceNode={relSource}
-                                onNodeSelect={(node) => {
-                                    if (relStep === 'SOURCE') {
-                                        if (node) {
-                                            setRelSource(node.name)
-                                            setRelStep('TARGET')
-                                            toast.info(t('graph.ontology.sourceSelected'))
-                                        }
-                                    } else if (relStep === 'TARGET') {
-                                        if (node) {
-                                            if (node.name === relSource) {
-                                                toast.error(t('graph.ontology.sourceTargetSame'))
-                                                return
-                                            }
-                                            setRelTarget(node.name)
-                                            setRelStep('TYPE')
-                                        }
-                                    } else {
-                                        setSelection(node ? { type: 'node', data: node as OntologyNode } : null)
-                                    }
-                                }}
-                                onEdgeSelect={(edge) => {
-                                    if (relStep === 'IDLE') {
-                                        setSelection(edge ? { type: 'edge', data: edge } : null)
-                                    }
-                                }}
-                                onSchemaChange={() => setRefreshKey(prev => prev + 1)}
-                            />
+                            {isMappingMode && (
+                                <div className="flex items-center gap-1.5 bg-primary/5 px-2.5 py-1 rounded-md border border-primary/20 text-primary text-xs">
+                                    <Info className="w-3 h-3" />
+                                    <span>{t('graph.binding.info')}</span>
+                                </div>
+                            )}
                         </div>
-
-                        {/* Right: Detail Panel */}
-                        {selection && (
-                            <div className="lg:col-span-1 border-l pl-1 h-full overflow-hidden">
-                                {isMappingMode ? (
-                                    <BindingDetailPanel
-                                        selection={selection}
-                                        onUpdate={() => setRefreshKey(prev => prev + 1)}
-                                        onClose={() => setSelection(null)}
-                                    />
+                        <div className="flex gap-1.5">
+                            {isEditMode && relStep === 'IDLE' && (
+                                <>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
+                                        onClick={() => setIsAddClassOpen(true)}
+                                    >
+                                        <Plus className="w-3 h-3 mr-1" />
+                                        {t('graph.ontology.addClass')}
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        variant="outline"
+                                        className="h-7 text-xs border-slate-200 text-slate-700 hover:bg-slate-50"
+                                        onClick={startAddRel}
+                                    >
+                                        <Plus className="w-3 h-3 mr-1" />
+                                        {t('graph.ontology.addRelationship')}
+                                    </Button>
+                                </>
+                            )}
+                            <Button
+                                size="sm"
+                                variant={isEditMode ? "default" : "outline"}
+                                onClick={toggleEditMode}
+                                className={`h-7 text-xs ${isEditMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
+                            >
+                                {isEditMode ? <Eye className="w-3 h-3 mr-1" /> : <Edit3 className="w-3 h-3 mr-1" />}
+                                {isEditMode ? t('graph.ontology.exitEditMode') : t('graph.ontology.editMode')}
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant={isMappingMode ? "default" : "outline"}
+                                onClick={toggleMappingMode}
+                                className={`h-7 text-xs ${isMappingMode ? "bg-primary text-white hover:opacity-90 transition-opacity border-none" : "border-slate-200"}`}
+                            >
+                                <LinkIcon className="w-3 h-3 mr-1" />
+                                {isMappingMode ? t('common.exit') : t('graph.ontology.dataMapping')}
+                            </Button>
+                            <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={handleExport}
+                                disabled={isExporting}
+                                className="h-7 text-xs border-slate-200"
+                            >
+                                {isExporting ? (
+                                    <Loader2 className="w-3 h-3 mr-1 animate-spin" />
                                 ) : (
-                                    <OntologyDetailPanel
-                                        selection={selection}
-                                        isEditMode={isEditMode}
-                                        onClose={() => setSelection(null)}
-                                        onUpdate={() => setRefreshKey(prev => prev + 1)}
-                                    />
+                                    <Download className="w-3 h-3 mr-1" />
                                 )}
+                                {t('graph.ontology.exportTTL')}
+                            </Button>
+                        </div>
+                    </div>
+                    <div className="flex-1 min-h-0">
+                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 h-full">
+                            {/* Left: Ontology Graph */}
+                            <div className={`bg-white rounded-lg border border-slate-200 overflow-hidden ${selection ? 'lg:col-span-2' : 'lg:col-span-3'}`}>
+                                <SchemaViewer
+                                    key={refreshKey}
+                                    isEditMode={isEditMode && !isMappingMode}
+                                    activeStep={relStep}
+                                    sourceNode={relSource}
+                                    onNodeSelect={(node) => {
+                                        if (relStep === 'SOURCE') {
+                                            if (node) {
+                                                setRelSource(node.name)
+                                                setRelStep('TARGET')
+                                                toast.info(t('graph.ontology.sourceSelected'))
+                                            }
+                                        } else if (relStep === 'TARGET') {
+                                            if (node) {
+                                                if (node.name === relSource) {
+                                                    toast.error(t('graph.ontology.sourceTargetSame'))
+                                                    return
+                                                }
+                                                setRelTarget(node.name)
+                                                setRelStep('TYPE')
+                                            }
+                                        } else {
+                                            setSelection(node ? { type: 'node', data: node as OntologyNode } : null)
+                                        }
+                                    }}
+                                    onEdgeSelect={(edge) => {
+                                        if (relStep === 'IDLE') {
+                                            setSelection(edge ? { type: 'edge', data: edge } : null)
+                                        }
+                                    }}
+                                    onSchemaChange={() => setRefreshKey(prev => prev + 1)}
+                                />
                             </div>
-                        )}
+
+                            {/* Right: Detail Panel */}
+                            {selection && (
+                                <div className="lg:col-span-1 border-l pl-1 h-full overflow-hidden">
+                                    {isMappingMode ? (
+                                        <BindingDetailPanel
+                                            selection={selection}
+                                            onUpdate={() => setRefreshKey(prev => prev + 1)}
+                                            onClose={() => setSelection(null)}
+                                        />
+                                    ) : (
+                                        <OntologyDetailPanel
+                                            selection={selection}
+                                            isEditMode={isEditMode}
+                                            onClose={() => setSelection(null)}
+                                            onUpdate={() => setRefreshKey(prev => prev + 1)}
+                                        />
+                                    )}
+                                </div>
+                            )}
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Add Class Dialog */}
-            <Dialog open={isAddClassOpen} onOpenChange={setIsAddClassOpen}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-base">{t('graph.ontology.addOntologyClass')}</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-3 text-left">
-                        <Label htmlFor="className" className="text-xs text-slate-500">{t('graph.ontology.className')}</Label>
-                        <Input
-                            id="className"
-                            value={newClassName}
-                            onChange={(e) => setNewClassName(e.target.value)}
-                            placeholder={t('graph.ontology.classPlaceholder')}
-                            autoFocus
-                            className="mt-1.5 h-8 text-sm"
-                        />
-                    </div>
-                    <DialogFooter className="gap-2">
-                        <Button size="sm" variant="outline" onClick={() => setIsAddClassOpen(false)} className="h-7 text-xs">{t('common.cancel')}</Button>
-                        <Button size="sm" onClick={handleAddClass} disabled={isCreatingClass || !newClassName} className="h-7 text-xs">
-                            {isCreatingClass && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                            {t('graph.ontology.create')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-
-            {/* Add Relationship Dialog */}
-            <Dialog open={relStep === 'TYPE'} onOpenChange={(open) => !open && cancelRelCreation()}>
-                <DialogContent className="sm:max-w-md">
-                    <DialogHeader>
-                        <DialogTitle className="text-base">{t('graph.ontology.setRelationshipType')}</DialogTitle>
-                    </DialogHeader>
-                    <div className="py-3 flex flex-col gap-3 text-left">
-                        <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2 rounded justify-center">
-                            <span className="font-medium text-slate-700">{relSource}</span>
-                            <ArrowRight className="w-3 h-3" />
-                            <span className="font-medium text-slate-700">{relTarget}</span>
-                        </div>
-                        <div>
-                            <Label htmlFor="relType" className="text-xs text-slate-500">{t('graph.ontology.relationshipLabel')}</Label>
+                {/* Add Class Dialog */}
+                <Dialog open={isAddClassOpen} onOpenChange={setIsAddClassOpen}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-base">{t('graph.ontology.addOntologyClass')}</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-3 text-left">
+                            <Label htmlFor="className" className="text-xs text-slate-500">{t('graph.ontology.className')}</Label>
                             <Input
-                                id="relType"
-                                value={relType}
-                                onChange={(e) => setRelType(e.target.value)}
-                                placeholder={t('graph.ontology.relationshipPlaceholder')}
+                                id="className"
+                                value={newClassName}
+                                onChange={(e) => setNewClassName(e.target.value)}
+                                placeholder={t('graph.ontology.classPlaceholder')}
                                 autoFocus
                                 className="mt-1.5 h-8 text-sm"
                             />
                         </div>
-                    </div>
-                    <DialogFooter className="gap-2">
-                        <Button size="sm" variant="outline" onClick={cancelRelCreation} className="h-7 text-xs">{t('common.cancel')}</Button>
-                        <Button size="sm" onClick={handleRelCreation} disabled={isCreatingRel || !relType} className="h-7 text-xs">
-                            {isCreatingRel && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
-                            {t('graph.ontology.confirmAdd')}
-                        </Button>
-                    </DialogFooter>
-                </DialogContent>
-            </Dialog>
-        </AppLayout>
+                        <DialogFooter className="gap-2">
+                            <Button size="sm" variant="outline" onClick={() => setIsAddClassOpen(false)} className="h-7 text-xs">{t('common.cancel')}</Button>
+                            <Button size="sm" onClick={handleAddClass} disabled={isCreatingClass || !newClassName} className="h-7 text-xs">
+                                {isCreatingClass && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                                {t('graph.ontology.create')}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+
+                {/* Add Relationship Dialog */}
+                <Dialog open={relStep === 'TYPE'} onOpenChange={(open) => !open && cancelRelCreation()}>
+                    <DialogContent className="sm:max-w-md">
+                        <DialogHeader>
+                            <DialogTitle className="text-base">{t('graph.ontology.setRelationshipType')}</DialogTitle>
+                        </DialogHeader>
+                        <div className="py-3 flex flex-col gap-3 text-left">
+                            <div className="flex items-center gap-2 text-xs text-slate-500 bg-slate-50 p-2 rounded justify-center">
+                                <span className="font-medium text-slate-700">{relSource}</span>
+                                <ArrowRight className="w-3 h-3" />
+                                <span className="font-medium text-slate-700">{relTarget}</span>
+                            </div>
+                            <div>
+                                <Label htmlFor="relType" className="text-xs text-slate-500">{t('graph.ontology.relationshipLabel')}</Label>
+                                <Input
+                                    id="relType"
+                                    value={relType}
+                                    onChange={(e) => setRelType(e.target.value)}
+                                    placeholder={t('graph.ontology.relationshipPlaceholder')}
+                                    autoFocus
+                                    className="mt-1.5 h-8 text-sm"
+                                />
+                            </div>
+                        </div>
+                        <DialogFooter className="gap-2">
+                            <Button size="sm" variant="outline" onClick={cancelRelCreation} className="h-7 text-xs">{t('common.cancel')}</Button>
+                            <Button size="sm" onClick={handleRelCreation} disabled={isCreatingRel || !relType} className="h-7 text-xs">
+                                {isCreatingRel && <Loader2 className="w-3 h-3 mr-1 animate-spin" />}
+                                {t('graph.ontology.confirmAdd')}
+                            </Button>
+                        </DialogFooter>
+                    </DialogContent>
+                </Dialog>
+            </AppLayout>
+        </ProtectedPage>
     )
 }

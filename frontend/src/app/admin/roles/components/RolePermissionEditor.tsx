@@ -25,7 +25,7 @@ export function RolePermissionEditor({ role }: RolePermissionEditorProps) {
       }
       // 重新加载角色数据
       const updated = await rolesApi.get(role.id)
-      role = updated
+      role = updated.data
       // 触发重新渲染
       window.location.reload()
     } catch (error) {

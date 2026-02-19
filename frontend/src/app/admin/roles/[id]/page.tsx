@@ -17,7 +17,7 @@ export default function RoleDetailPage() {
     async function loadRole() {
       try {
         const data = await rolesApi.get(roleId)
-        setRole(data)
+        setRole(data.data)
       } catch (error) {
         console.error('Failed to load role:', error)
       } finally {

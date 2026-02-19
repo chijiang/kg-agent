@@ -16,8 +16,8 @@ export function UserList() {
     setLoading(true)
     try {
       const response = await usersApi.list()
-      setUsers(response.items)
-      setTotal(response.total)
+      setUsers(response.data.items)
+      setTotal(response.data.total)
     } catch (error) {
       console.error('Failed to load users:', error)
     } finally {
@@ -54,11 +54,10 @@ export function UserList() {
               <td className="p-2">{user.username}</td>
               <td className="p-2">{user.email || '-'}</td>
               <td className="p-2">
-                <span className={`px-2 py-1 rounded text-sm ${
-                  user.approval_status === 'approved' ? 'bg-green-100 text-green-800' :
-                  user.approval_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
-                  'bg-red-100 text-red-800'
-                }`}>
+                <span className={`px-2 py-1 rounded text-sm ${user.approval_status === 'approved' ? 'bg-green-100 text-green-800' :
+                    user.approval_status === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                      'bg-red-100 text-red-800'
+                  }`}>
                   {user.approval_status}
                 </span>
               </td>

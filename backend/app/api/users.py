@@ -2,11 +2,11 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, or_
-from typing import Optional
+from typing import Optional, List
 from app.core.database import get_db
 from app.core.security import hash_password
 from app.models.user import User
-from app.models.role import UserRole
+from app.models.role import UserRole, Role
 from app.schemas.role import (
     UserCreate,
     UserUpdate,
@@ -17,6 +17,7 @@ from app.schemas.role import (
     ResetPasswordResponse,
     AssignRoleRequest,
     PermissionCacheResponse,
+    RoleResponse,
 )
 from app.api.deps import get_current_user
 from app.services.permission_service import PermissionService
@@ -29,6 +30,9 @@ async def require_admin(current_user: User = Depends(get_current_user)):
     if not current_user.is_admin:
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
+
+
+# ... (skip to end of file to add new endpoint, but I need to handle imports first)
 
 
 @router.get("", response_model=UserListResponse)
@@ -49,10 +53,7 @@ async def list_users(
 
     if search:
         query = query.where(
-            or_(
-                User.username.ilike(f"%{search}%"),
-                User.email.ilike(f"%{search}%")
-            )
+            or_(User.username.ilike(f"%{search}%"), User.email.ilike(f"%{search}%"))
         )
 
     # 获取总数
@@ -66,8 +67,7 @@ async def list_users(
     users = result.scalars().all()
 
     return UserListResponse(
-        items=[UserResponse.model_validate(u) for u in users],
-        total=total
+        items=[UserResponse.model_validate(u) for u in users], total=total
     )
 
 
@@ -84,13 +84,16 @@ async def create_user(
         raise HTTPException(status_code=400, detail="Username already exists")
 
     # 创建用户（直接approved）
+    from app.core.config import settings
+
+    password = user_data.password or settings.DEFAULT_USER_PASSWORD
     user = User(
         username=user_data.username,
-        password_hash=hash_password(user_data.password),
+        password_hash=hash_password(password),
         email=user_data.email,
         approval_status="approved",
         approved_by=current_user.id,
-        is_password_changed=False
+        is_password_changed=False,
     )
     db.add(user)
     await db.commit()
@@ -105,14 +108,11 @@ async def get_pending_approvals(
     db: AsyncSession = Depends(get_db),
 ):
     """获取待审批用户列表（admin only）"""
-    result = await db.execute(
-        select(User).where(User.approval_status == "pending")
-    )
+    result = await db.execute(select(User).where(User.approval_status == "pending"))
     users = result.scalars().all()
 
     return UserListResponse(
-        items=[UserResponse.model_validate(u) for u in users],
-        total=len(users)
+        items=[UserResponse.model_validate(u) for u in users], total=len(users)
     )
 
 
@@ -182,14 +182,15 @@ async def reset_user_password(
         raise HTTPException(status_code=404, detail="User not found")
 
     # 默认密码
-    default_password = "123456"
+    from app.core.config import settings
+
+    default_password = settings.DEFAULT_USER_PASSWORD
     user.password_hash = hash_password(default_password)
     user.is_password_changed = False
     await db.commit()
 
     return ResetPasswordResponse(
-        message="Password reset successfully",
-        default_password=default_password
+        message="Password reset successfully", default_password=default_password
     )
 
 
@@ -257,8 +258,7 @@ async def assign_role(
     # 检查是否已分配
     result = await db.execute(
         select(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == req.role_id
+            UserRole.user_id == user_id, UserRole.role_id == req.role_id
         )
     )
     if result.scalar_one_or_none():
@@ -266,14 +266,36 @@ async def assign_role(
 
     # 创建关联
     user_role = UserRole(
-        user_id=user_id,
-        role_id=req.role_id,
-        assigned_by=current_user.id
+        user_id=user_id, role_id=req.role_id, assigned_by=current_user.id
     )
     db.add(user_role)
     await db.commit()
 
     return {"message": "Role assigned successfully"}
+
+
+@router.get("/{user_id}/roles", response_model=List[RoleResponse])
+async def get_user_roles(
+    user_id: int,
+    current_user: User = Depends(require_admin),
+    db: AsyncSession = Depends(get_db),
+):
+    """获取用户角色列表（admin only）"""
+    # 检查用户是否存在
+    user_result = await db.execute(select(User).where(User.id == user_id))
+    if not user_result.scalar_one_or_none():
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # 查询用户角色
+    query = (
+        select(Role)
+        .join(UserRole, Role.id == UserRole.role_id)
+        .where(UserRole.user_id == user_id)
+    )
+    result = await db.execute(query)
+    roles = result.scalars().all()
+
+    return [RoleResponse.model_validate(role) for role in roles]
 
 
 @router.delete("/{user_id}/roles/{role_id}")
@@ -285,10 +307,7 @@ async def remove_role(
 ):
     """移除用户角色（admin only）"""
     result = await db.execute(
-        select(UserRole).where(
-            UserRole.user_id == user_id,
-            UserRole.role_id == role_id
-        )
+        select(UserRole).where(UserRole.user_id == user_id, UserRole.role_id == role_id)
     )
     user_role = result.scalar_one_or_none()
 

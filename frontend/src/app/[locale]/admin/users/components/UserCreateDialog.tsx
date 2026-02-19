@@ -14,7 +14,6 @@ interface UserCreateDialogProps {
 
 export function UserCreateDialog({ onClose, onCreated }: UserCreateDialogProps) {
   const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
   const [email, setEmail] = useState('')
   const [loading, setLoading] = useState(false)
 
@@ -23,7 +22,7 @@ export function UserCreateDialog({ onClose, onCreated }: UserCreateDialogProps) 
     setLoading(true)
 
     try {
-      await usersApi.create({ username, password, email: email || undefined })
+      await usersApi.create({ username, email: email || undefined })
       onCreated()
       onClose()
     } catch (error) {
@@ -43,10 +42,6 @@ export function UserCreateDialog({ onClose, onCreated }: UserCreateDialogProps) 
           <div>
             <label className="block text-sm font-medium mb-1">Username</label>
             <Input value={username} onChange={(e) => setUsername(e.target.value)} required />
-          </div>
-          <div>
-            <label className="block text-sm font-medium mb-1">Password</label>
-            <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Email</label>

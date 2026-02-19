@@ -587,7 +587,7 @@ export const usersApi = {
     api.get<UserListResponse>('/api/users', { params }),
 
   // 创建用户
-  create: (data: { username: string; password: string; email?: string }) =>
+  create: (data: { username: string; password?: string; email?: string }) =>
     api.post<User>('/api/users', data),
 
   // 更新用户
@@ -621,6 +621,10 @@ export const usersApi = {
   // 移除角色
   removeRole: (userId: number, roleId: number) =>
     api.delete(`/api/users/${userId}/roles/${roleId}`),
+
+  // 获取用户角色
+  getRoles: (userId: number) =>
+    api.get<Role[]>(`/api/users/${userId}/roles`),
 
   // 获取当前用户权限
   getMyPermissions: () =>

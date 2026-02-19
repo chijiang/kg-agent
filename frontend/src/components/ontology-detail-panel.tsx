@@ -18,7 +18,7 @@ import {
 } from '@/components/ui/select'
 import { useTranslations } from 'next-intl'
 
-import { Selection, OntologyNode } from '@/app/[locale]/graph/ontology/page'
+import { Selection, OntologyNode } from '@/types/ontology'
 
 // Color options for class customization
 const COLOR_OPTIONS = [

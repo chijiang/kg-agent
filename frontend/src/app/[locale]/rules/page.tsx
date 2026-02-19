@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useRouter } from 'next/navigation'
 import { useTranslations } from 'next-intl'
+import { ProtectedPage } from '@/components/auth/ProtectedPage'
 import { AppLayout } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -26,6 +27,7 @@ import {
     ActionDetail,
     ActionParameter,
     ExecutionLog,
+    graphApi
 } from '@/lib/api'
 import { toast } from 'sonner'
 import {
@@ -45,7 +47,6 @@ import {
     History,
 } from 'lucide-react'
 import BusinessEditor, { Schema, parseActionSignature } from '@/components/business-editor'
-import { graphApi } from '@/lib/api'
 
 // Rule card component
 function RuleCard({
@@ -310,7 +311,7 @@ RULE NewRule PRIORITY 100 {
         SET e.processedAt = NOW();
     }
 }
-`)
+                    `)
         }
         setError('')
 
@@ -625,8 +626,6 @@ function ActionEditorDialog({
                 const paramMatch = fullActionName.match(/^([^()]+)\((.*)\)$/)
                 if (paramMatch) {
                     setName(paramMatch[1])
-                    // Parameters are usually in the action details if we use a different API, 
-                    // but here we can parse from DSL as the source of truth
                 } else {
                     setName(fullActionName)
                 }
@@ -645,13 +644,13 @@ function ActionEditorDialog({
             setDslContent(`// ${t('newActionExample')}
 ACTION Entity.submit {
     PRECONDITION statusCheck: this.status == "Draft"
-        ON_FAILURE: "Only draft items can be submitted"
+    ON_FAILURE: "Only draft items can be submitted"
     EFFECT {
         SET this.status = "Submitted";
         SET this.submittedAt = NOW();
     }
 }
-`)
+                    `)
         }
         setError('')
 
@@ -1156,251 +1155,253 @@ export default function RulesPage() {
     }
 
     return (
-        <AppLayout>
-            <div className="space-y-6">
-                {/* Header */}
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
-                            <Settings className="h-6 w-6 text-indigo-600" />
-                            {t('title')}
-                        </h1>
-                        <p className="text-slate-600 mt-1">
-                            {t('description')}
-                        </p>
+        <ProtectedPage pageId="rules">
+            <AppLayout>
+                <div className="space-y-6">
+                    {/* Header */}
+                    <div className="flex items-center justify-between">
+                        <div>
+                            <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
+                                <Settings className="h-6 w-6 text-indigo-600" />
+                                {t('title')}
+                            </h1>
+                            <p className="text-slate-600 mt-1">
+                                {t('description')}
+                            </p>
+                        </div>
                     </div>
+
+                    {/* Tabs */}
+                    <Tabs value={activeTab} onValueChange={setActiveTab}>
+                        <div className="flex items-center justify-between">
+                            <TabsList className="bg-slate-100">
+                                <TabsTrigger
+                                    value="rules"
+                                    className="data-[state=active]:bg-white"
+                                >
+                                    <Zap className="h-4 w-4 mr-2" />
+                                    {t('rules')} ({rules.length})
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="actions"
+                                    className="data-[state=active]:bg-white"
+                                >
+                                    <Play className="h-4 w-4 mr-2" />
+                                    {t('actions')} ({actions.length})
+                                </TabsTrigger>
+                                <TabsTrigger
+                                    value="logs"
+                                    className="data-[state=active]:bg-white"
+                                >
+                                    <History className="h-4 w-4 mr-2" />
+                                    {t('executionLogs')}
+                                </TabsTrigger>
+                            </TabsList>
+
+                            {activeTab === 'rules' ? (
+                                <Button
+                                    onClick={() => {
+                                        setEditingRule(null)
+                                        setRuleEditorOpen(true)
+                                    }}
+                                    className="bg-indigo-600 hover:bg-indigo-700"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    {t('createRule')}
+                                </Button>
+                            ) : (
+                                <Button
+                                    onClick={() => {
+                                        setEditingAction(null)
+                                        setActionEditorOpen(true)
+                                    }}
+                                    className="bg-primary hover:opacity-90 transition-opacity"
+                                >
+                                    <Plus className="h-4 w-4 mr-2" />
+                                    {t('createAction')}
+                                </Button>
+                            )}
+                        </div>
+
+                        {/* Rules Tab */}
+                        <TabsContent value="rules" className="mt-6">
+                            {rulesLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
+                                </div>
+                            ) : rules.length === 0 ? (
+                                <Card className="border-dashed">
+                                    <CardContent className="flex flex-col items-center justify-center py-12">
+                                        <Layers className="h-12 w-12 text-slate-300 mb-4" />
+                                        <h3 className="text-lg font-medium text-slate-600">
+                                            {t('noRules')}
+                                        </h3>
+                                        <p className="text-slate-500 mt-1">
+                                            {t('noRulesDesc')}
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {rules.map((rule) => (
+                                        <RuleCard
+                                            key={rule.id}
+                                            rule={rule}
+                                            onEdit={() => handleEditRule(rule)}
+                                            onDelete={() => setDeletingRule(rule)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        {/* Actions Tab */}
+                        <TabsContent value="actions" className="mt-6">
+                            {actionsLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-emerald-600" />
+                                </div>
+                            ) : actions.length === 0 ? (
+                                <Card className="border-dashed">
+                                    <CardContent className="flex flex-col items-center justify-center py-12">
+                                        <Code className="h-12 w-12 text-slate-300 mb-4" />
+                                        <h3 className="text-lg font-medium text-slate-600">
+                                            {t('noActions')}
+                                        </h3>
+                                        <p className="text-slate-500 mt-1">
+                                            {t('noActionsDesc')}
+                                        </p>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                                    {actions.map((action) => (
+                                        <ActionCard
+                                            key={action.id}
+                                            action={action}
+                                            onEdit={() => handleEditAction(action)}
+                                            onDelete={() => setDeletingAction(action)}
+                                        />
+                                    ))}
+                                </div>
+                            )}
+                        </TabsContent>
+
+                        {/* Logs Tab */}
+                        <TabsContent value="logs" className="mt-6">
+                            {logsLoading ? (
+                                <div className="flex items-center justify-center py-12">
+                                    <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
+                                </div>
+                            ) : logs.length === 0 ? (
+                                <Card className="border-dashed">
+                                    <CardContent className="flex flex-col items-center justify-center py-12">
+                                        <History className="h-12 w-12 text-slate-300 mb-4" />
+                                        <h3 className="text-lg font-medium text-slate-600">
+                                            {t('noLogs')}
+                                        </h3>
+                                    </CardContent>
+                                </Card>
+                            ) : (
+                                <Card>
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full text-sm text-left">
+                                            <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
+                                                <tr>
+                                                    <th className="px-6 py-3 font-medium">{t('logTimestamp')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logType')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logName')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logEntity')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logActor')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logStatus')}</th>
+                                                    <th className="px-6 py-3 font-medium">{t('logDetails')}</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody className="divide-y divide-slate-100">
+                                                {logs.map((log) => (
+                                                    <tr key={log.id} className="hover:bg-slate-50 transition-colors">
+                                                        <td className="px-6 py-4 whitespace-nowrap text-slate-600">
+                                                            {new Date(log.timestamp).toLocaleString()}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${log.type === 'RULE' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
+                                                                }`}>
+                                                                {log.type}
+                                                            </span>
+                                                        </td>
+                                                        <td className="px-6 py-4 font-medium text-slate-800">
+                                                            {log.name}
+                                                        </td>
+                                                        <td className="px-6 py-4 text-slate-600 font-mono text-xs">
+                                                            {log.entity_id}
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            <div className="flex flex-col">
+                                                                <span className="text-slate-700 font-medium">{log.actor_name || '-'}</span>
+                                                                <span className="text-[10px] text-slate-400">{log.actor_type}</span>
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 whitespace-nowrap">
+                                                            {log.success ? (
+                                                                <span className="flex items-center text-green-600 text-xs font-medium">
+                                                                    <CheckCircle className="h-3 w-3 mr-1" />
+                                                                    {tCommon('success')}
+                                                                </span>
+                                                            ) : (
+                                                                <span className="flex items-center text-red-600 text-xs font-medium">
+                                                                    <XCircle className="h-3 w-3 mr-1" />
+                                                                    {tCommon('error')}
+                                                                </span>
+                                                            )}
+                                                        </td>
+                                                        <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap text-slate-500 text-xs" title={JSON.stringify(log.detail)}>
+                                                            {JSON.stringify(log.detail)}
+                                                        </td>
+                                                    </tr>
+                                                ))}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                </Card>
+                            )}
+                        </TabsContent>
+                    </Tabs>
                 </div>
 
-                {/* Tabs */}
-                <Tabs value={activeTab} onValueChange={setActiveTab}>
-                    <div className="flex items-center justify-between">
-                        <TabsList className="bg-slate-100">
-                            <TabsTrigger
-                                value="rules"
-                                className="data-[state=active]:bg-white"
-                            >
-                                <Zap className="h-4 w-4 mr-2" />
-                                {t('rules')} ({rules.length})
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="actions"
-                                className="data-[state=active]:bg-white"
-                            >
-                                <Play className="h-4 w-4 mr-2" />
-                                {t('actions')} ({actions.length})
-                            </TabsTrigger>
-                            <TabsTrigger
-                                value="logs"
-                                className="data-[state=active]:bg-white"
-                            >
-                                <History className="h-4 w-4 mr-2" />
-                                {t('executionLogs')}
-                            </TabsTrigger>
-                        </TabsList>
+                {/* Rule Editor Dialog */}
+                <RuleEditorDialog
+                    open={ruleEditorOpen}
+                    onClose={() => setRuleEditorOpen(false)}
+                    rule={editingRule}
+                    onSave={loadRules}
+                />
 
-                        {activeTab === 'rules' ? (
-                            <Button
-                                onClick={() => {
-                                    setEditingRule(null)
-                                    setRuleEditorOpen(true)
-                                }}
-                                className="bg-indigo-600 hover:bg-indigo-700"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                {t('createRule')}
-                            </Button>
-                        ) : (
-                            <Button
-                                onClick={() => {
-                                    setEditingAction(null)
-                                    setActionEditorOpen(true)
-                                }}
-                                className="bg-primary hover:opacity-90 transition-opacity"
-                            >
-                                <Plus className="h-4 w-4 mr-2" />
-                                {t('createAction')}
-                            </Button>
-                        )}
-                    </div>
+                {/* Action Editor Dialog */}
+                <ActionEditorDialog
+                    open={actionEditorOpen}
+                    onClose={() => setActionEditorOpen(false)}
+                    action={editingAction}
+                    onSave={loadActions}
+                />
 
-                    {/* Rules Tab */}
-                    <TabsContent value="rules" className="mt-6">
-                        {rulesLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <RefreshCw className="h-8 w-8 animate-spin text-indigo-600" />
-                            </div>
-                        ) : rules.length === 0 ? (
-                            <Card className="border-dashed">
-                                <CardContent className="flex flex-col items-center justify-center py-12">
-                                    <Layers className="h-12 w-12 text-slate-300 mb-4" />
-                                    <h3 className="text-lg font-medium text-slate-600">
-                                        {t('noRules')}
-                                    </h3>
-                                    <p className="text-slate-500 mt-1">
-                                        {t('noRulesDesc')}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {rules.map((rule) => (
-                                    <RuleCard
-                                        key={rule.id}
-                                        rule={rule}
-                                        onEdit={() => handleEditRule(rule)}
-                                        onDelete={() => setDeletingRule(rule)}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
+                {/* Delete Rule Confirmation */}
+                <DeleteConfirmDialog
+                    open={!!deletingRule}
+                    onClose={() => setDeletingRule(null)}
+                    onConfirm={handleDeleteRule}
+                    itemName={deletingRule?.name || ''}
+                    itemType="rule"
+                />
 
-                    {/* Actions Tab */}
-                    <TabsContent value="actions" className="mt-6">
-                        {actionsLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <RefreshCw className="h-8 w-8 animate-spin text-emerald-600" />
-                            </div>
-                        ) : actions.length === 0 ? (
-                            <Card className="border-dashed">
-                                <CardContent className="flex flex-col items-center justify-center py-12">
-                                    <Code className="h-12 w-12 text-slate-300 mb-4" />
-                                    <h3 className="text-lg font-medium text-slate-600">
-                                        {t('noActions')}
-                                    </h3>
-                                    <p className="text-slate-500 mt-1">
-                                        {t('noActionsDesc')}
-                                    </p>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                {actions.map((action) => (
-                                    <ActionCard
-                                        key={action.id}
-                                        action={action}
-                                        onEdit={() => handleEditAction(action)}
-                                        onDelete={() => setDeletingAction(action)}
-                                    />
-                                ))}
-                            </div>
-                        )}
-                    </TabsContent>
-
-                    {/* Logs Tab */}
-                    <TabsContent value="logs" className="mt-6">
-                        {logsLoading ? (
-                            <div className="flex items-center justify-center py-12">
-                                <RefreshCw className="h-8 w-8 animate-spin text-slate-400" />
-                            </div>
-                        ) : logs.length === 0 ? (
-                            <Card className="border-dashed">
-                                <CardContent className="flex flex-col items-center justify-center py-12">
-                                    <History className="h-12 w-12 text-slate-300 mb-4" />
-                                    <h3 className="text-lg font-medium text-slate-600">
-                                        {t('noLogs')}
-                                    </h3>
-                                </CardContent>
-                            </Card>
-                        ) : (
-                            <Card>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full text-sm text-left">
-                                        <thead className="text-xs text-slate-500 uppercase bg-slate-50 border-b">
-                                            <tr>
-                                                <th className="px-6 py-3 font-medium">{t('logTimestamp')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logType')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logName')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logEntity')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logActor')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logStatus')}</th>
-                                                <th className="px-6 py-3 font-medium">{t('logDetails')}</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody className="divide-y divide-slate-100">
-                                            {logs.map((log) => (
-                                                <tr key={log.id} className="hover:bg-slate-50 transition-colors">
-                                                    <td className="px-6 py-4 whitespace-nowrap text-slate-600">
-                                                        {new Date(log.timestamp).toLocaleString()}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${log.type === 'RULE' ? 'bg-blue-100 text-blue-700' : 'bg-emerald-100 text-emerald-700'
-                                                            }`}>
-                                                            {log.type}
-                                                        </span>
-                                                    </td>
-                                                    <td className="px-6 py-4 font-medium text-slate-800">
-                                                        {log.name}
-                                                    </td>
-                                                    <td className="px-6 py-4 text-slate-600 font-mono text-xs">
-                                                        {log.entity_id}
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        <div className="flex flex-col">
-                                                            <span className="text-slate-700 font-medium">{log.actor_name || '-'}</span>
-                                                            <span className="text-[10px] text-slate-400">{log.actor_type}</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 whitespace-nowrap">
-                                                        {log.success ? (
-                                                            <span className="flex items-center text-green-600 text-xs font-medium">
-                                                                <CheckCircle className="h-3 w-3 mr-1" />
-                                                                {tCommon('success')}
-                                                            </span>
-                                                        ) : (
-                                                            <span className="flex items-center text-red-600 text-xs font-medium">
-                                                                <XCircle className="h-3 w-3 mr-1" />
-                                                                {tCommon('error')}
-                                                            </span>
-                                                        )}
-                                                    </td>
-                                                    <td className="px-6 py-4 max-w-xs overflow-hidden text-ellipsis whitespace-nowrap text-slate-500 text-xs" title={JSON.stringify(log.detail)}>
-                                                        {JSON.stringify(log.detail)}
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </Card>
-                        )}
-                    </TabsContent>
-                </Tabs>
-            </div>
-
-            {/* Rule Editor Dialog */}
-            <RuleEditorDialog
-                open={ruleEditorOpen}
-                onClose={() => setRuleEditorOpen(false)}
-                rule={editingRule}
-                onSave={loadRules}
-            />
-
-            {/* Action Editor Dialog */}
-            <ActionEditorDialog
-                open={actionEditorOpen}
-                onClose={() => setActionEditorOpen(false)}
-                action={editingAction}
-                onSave={loadActions}
-            />
-
-            {/* Delete Rule Confirmation */}
-            <DeleteConfirmDialog
-                open={!!deletingRule}
-                onClose={() => setDeletingRule(null)}
-                onConfirm={handleDeleteRule}
-                itemName={deletingRule?.name || ''}
-                itemType="rule"
-            />
-
-            {/* Delete Action Confirmation */}
-            <DeleteConfirmDialog
-                open={!!deletingAction}
-                onClose={() => setDeletingAction(null)}
-                onConfirm={handleDeleteAction}
-                itemName={deletingAction?.name || ''}
-                itemType="action"
-            />
-        </AppLayout>
+                {/* Delete Action Confirmation */}
+                <DeleteConfirmDialog
+                    open={!!deletingAction}
+                    onClose={() => setDeletingAction(null)}
+                    onConfirm={handleDeleteAction}
+                    itemName={deletingAction?.name || ''}
+                    itemType="action"
+                />
+            </AppLayout>
+        </ProtectedPage>
     )
 }

@@ -9,14 +9,19 @@ export function usePermissions() {
 
   useEffect(() => {
     async function loadPermissions() {
-      if (!token || !user) {
+      if (!token || !user || permissions) {
         setLoading(false)
         return
       }
 
       try {
-        const permissions = await usersApi.getMyPermissions()
-        setPermissions(permissions)
+        const res = await usersApi.getMyPermissions()
+        const permissionsData = res.data
+        setPermissions(permissionsData)
+        // Sync is_admin status back to user object if needed
+        if (permissionsData.is_admin && !user.is_admin) {
+          useAuthStore.getState().updateUser({ is_admin: true })
+        }
       } catch (error) {
         console.error('Failed to load permissions:', error)
       } finally {

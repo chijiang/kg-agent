@@ -13,6 +13,7 @@ class ApprovalStatus(str):
 
 # ==================== Role Schemas ====================
 
+
 class RoleBase(BaseModel):
     name: str
     description: Optional[str] = None
@@ -39,11 +40,13 @@ class RoleResponse(RoleBase):
 
 # ==================== UserRole Schemas ====================
 
+
 class AssignRoleRequest(BaseModel):
     role_id: int
 
 
 # ==================== Permission Schemas ====================
+
 
 class PagePermissionCreate(BaseModel):
     page_id: str
@@ -60,6 +63,7 @@ class EntityPermissionCreate(BaseModel):
 
 # ==================== Role Detail with Permissions ====================
 
+
 class RoleDetailResponse(RoleResponse):
     page_permissions: List[str] = []
     action_permissions: List[dict] = []  # [{"entity_type": str, "action_name": str}]
@@ -68,13 +72,14 @@ class RoleDetailResponse(RoleResponse):
 
 # ==================== User Schemas (扩展) ====================
 
+
 class UserBase(BaseModel):
     username: str
     email: Optional[str] = None
 
 
 class UserCreate(UserBase):
-    password: str
+    password: Optional[str] = None
 
 
 class UserUpdate(BaseModel):
@@ -101,6 +106,7 @@ class UserListResponse(BaseModel):
 
 # ==================== User Approval ====================
 
+
 class ApproveUserRequest(BaseModel):
     note: Optional[str] = None
 
@@ -110,6 +116,7 @@ class RejectUserRequest(BaseModel):
 
 
 # ==================== Password Reset ====================
+
 
 class ResetPasswordResponse(BaseModel):
     message: str
@@ -123,6 +130,7 @@ class ChangePasswordRequest(BaseModel):
 
 # ==================== Permission Cache ====================
 
+
 class PermissionCacheResponse(BaseModel):
     accessible_pages: List[str]
     accessible_actions: dict  # {entity_type: [action_names]}
@@ -131,6 +139,7 @@ class PermissionCacheResponse(BaseModel):
 
 
 # ==================== Register Response (修改) ====================
+
 
 class RegisterPendingResponse(BaseModel):
     message: str

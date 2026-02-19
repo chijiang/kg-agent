@@ -31,6 +31,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 1440
+    DEFAULT_USER_PASSWORD: str = "123456"
 
     # Database - 支持两种配置方式
 
