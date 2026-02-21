@@ -72,20 +72,26 @@ async def get_entity_data(
     entity_type: str,
     entity_id: str,
 ) -> dict[str, Any] | None:
-    """Retrieve entity data from the database.
+    """Retrieve entity data from the database strictly using numeric ID.
 
     Args:
         session: Active database session
         entity_type: Entity type/label
-        entity_id: Entity name/identifier
+        entity_id: Entity database identifier (must be numeric)
 
     Returns:
-        Entity properties dict, or None if not found
+        Entity properties dict, or None if not found or ID is not numeric
     """
+    if not entity_id.isdigit():
+        logger.warning(f"get_entity_data: Non-numeric ID provided: {entity_id}")
+        return None
+
     storage = PGGraphStorage(session)
-    results = await storage.search_instances(entity_id, entity_type, limit=1)
-    if results:
-        return results[0].get("properties", {})
+    data = await storage.get_entity_by_id(int(entity_id))
+
+    if data and data.get("entity_type") == entity_type:
+        return data.get("properties", {})
+
     return None
 
 

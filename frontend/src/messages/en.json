@@ -78,7 +78,9 @@
     "instances": "Instance Graph",
     "dataProducts": "Data Products",
     "rules": "Business Rules",
-    "config": "Settings"
+    "config": "Settings",
+    "users": "User Management",
+    "roles": "Role Management"
   },
   "layout": {
     "title": "Enterprise Ontology Platform",

@@ -16,6 +16,37 @@ api.interceptors.request.use((config) => {
   return config
 })
 
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    // Normalize FastAPI validation errors (array of objects) to string to prevent React rendering issues
+    if (error.response?.data?.detail && Array.isArray(error.response.data.detail)) {
+      try {
+        error.response.data.detail = error.response.data.detail
+          .map((d: any) => `${d.loc?.join('.') || 'Error'}: ${d.msg || ''}`)
+          .join('; ')
+      } catch (e) {
+        // Fallback if parsing fails
+      }
+    }
+
+    if (error.response?.status === 401) {
+      const token = localStorage.getItem('auth-storage')
+      if (token) {
+        localStorage.removeItem('auth-storage')
+        if (typeof window !== 'undefined') {
+          const match = window.location.pathname.match(/^\/([a-z]{2})(\/|$)/)
+          const locale = match ? match[1] : 'en'
+          if (!window.location.pathname.includes('/login')) {
+            window.location.href = `/${locale}/login`
+          }
+        }
+      }
+    }
+    return Promise.reject(error)
+  }
+)
+
 export const authApi = {
   register: (username: string, password: string, email?: string) =>
     api.post('/auth/register', { username, password, email }),
@@ -539,6 +570,7 @@ export interface Role {
   name: string
   description: string | null
   is_system: boolean
+  role_type: 'system' | 'business'
   created_at: string
   updated_at: string
 }
@@ -637,15 +669,15 @@ export const usersApi = {
 
 export const rolesApi = {
   // 获取所有角色
-  list: () =>
-    api.get<Role[]>('/api/roles'),
+  list: (roleType?: 'system' | 'business') =>
+    api.get<Role[]>('/api/roles', { params: roleType ? { role_type: roleType } : {} }),
 
   // 获取角色详情
   get: (roleId: number) =>
     api.get<RoleDetail>(`/api/roles/${roleId}`),
 
   // 创建角色
-  create: (data: { name: string; description?: string }) =>
+  create: (data: { name: string; description?: string; role_type?: 'system' | 'business' }) =>
     api.post<Role>('/api/roles', data),
 
   // 更新角色

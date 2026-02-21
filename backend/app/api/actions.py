@@ -68,7 +68,9 @@ def get_action_executor() -> ActionExecutor:
 class ActionExecutionRequest(BaseModel):
     """Request model for executing an action."""
 
-    entity_id: str = Field(..., description="ID of the entity to execute action on")
+    entity_id: str | int = Field(
+        ..., description="ID of the entity to execute action on"
+    )
     entity_data: dict[str, Any] = Field(
         default_factory=dict, description="Current entity data"
     )
@@ -137,46 +139,52 @@ async def execute_action(
         db, current_user, entity_type, action_name
     )
     if not has_permission:
-        raise HTTPException(status_code=403, detail="No permission to execute this action")
+        raise HTTPException(
+            status_code=403, detail="No permission to execute this action"
+        )
     # Create evaluation context
     # Build entity dict with id and data
 
-    # Resolve entity_id (which might be a name) to a real database ID
+    # Resolve entity_id (strictly database ID)
+    entity_id_str = str(request.entity_id)
+    if not entity_id_str.isdigit():
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid entity_id: '{request.entity_id}'. Must be a numeric database ID.",
+        )
+
     storage = PGGraphStorage(db)
-    resolved_entity = await storage.get_entity_by_name(request.entity_id, entity_type)
+    resolved_entity = await storage.get_entity_by_id(int(request.entity_id))
 
-    real_id = request.entity_id
-    if resolved_entity:
-        real_id = resolved_entity["id"]
-        # Also merge properties from DB to ensure we have the latest state
-        request.entity_data = {**resolved_entity["properties"], **request.entity_data}
-    else:
-        # If not found by name, it might already be an ID or the record is missing
-        # We try to keep going but it might fail later
-        pass
+    if not resolved_entity or resolved_entity.get("entity_type") != entity_type:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Entity {entity_type} with ID {request.entity_id} not found",
+        )
 
-    # Ensure id from request (real DB ID) takes precedence over any 'id' in entity_data
-    entity = {**request.entity_data, "id": real_id, "__type__": entity_type}
+    # Use resolved entity data and ensure ID is integer
+    entity = {
+        **resolved_entity["properties"],
+        **request.entity_data,
+        "id": resolved_entity["id"],
+        "__type__": entity_type,
+    }
 
     # Get database session from app state
     session = db
 
-    try:
-        context = EvaluationContext(
-            entity=entity, old_values={}, session=session, variables=request.params
-        )
+    context = EvaluationContext(
+        entity=entity, old_values={}, session=session, variables=request.params
+    )
 
-        # Execute the action
-        result = await executor.execute(
-            entity_type,
-            action_name,
-            context,
-            actor_name=current_user.username,
-            actor_type="USER",
-        )
-    finally:
-        if session:
-            await session.close()
+    # Execute the action
+    result = await executor.execute(
+        entity_type,
+        action_name,
+        context,
+        actor_name=current_user.username,
+        actor_type="USER",
+    )
 
     import logging
 
@@ -542,7 +550,9 @@ async def list_entity_actions(
     actions = registry.list_by_entity(entity_type)
 
     # 获取用户对该实体类型有权限的actions
-    allowed_actions = user_actions.get(entity_type, []) if not current_user.is_admin else []
+    allowed_actions = (
+        user_actions.get(entity_type, []) if not current_user.is_admin else []
+    )
 
     action_infos = []
     for action in actions:

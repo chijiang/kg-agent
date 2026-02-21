@@ -111,30 +111,71 @@ export function UserEditDialog({ user, onClose, onUpdated }: UserEditDialogProps
                                 Loading roles...
                             </div>
                         ) : (
-                            <div className="space-y-2 max-h-48 overflow-y-auto border rounded-md p-2">
-                                {availableRoles.map(role => (
-                                    <div key={role.id} className="flex items-start space-x-2 p-1 hover:bg-gray-50 rounded">
-                                        <Checkbox
-                                            id={`role-${role.id}`}
-                                            checked={isAssigned(role.id)}
-                                            onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleToggleRole(role.id, e.target.checked)}
-                                        />
-                                        <div className="grid gap-1.5 leading-none">
-                                            <label
-                                                htmlFor={`role-${role.id}`}
-                                                className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                                            >
-                                                {role.name}
-                                                {role.is_system && <span className="ml-2 text-xs text-gray-400 font-normal">(System)</span>}
-                                            </label>
-                                            {role.description && (
-                                                <p className="text-xs text-gray-500">
-                                                    {role.description}
-                                                </p>
-                                            )}
-                                        </div>
+                            <div className="space-y-4 max-h-64 overflow-y-auto border rounded-md p-3">
+                                {/* System Roles Section */}
+                                {availableRoles.filter(r => r.role_type === 'system').length > 0 && (
+                                    <div className="space-y-2">
+                                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-gray-400">System Roles</h4>
+                                        {availableRoles.filter(r => r.role_type === 'system').map(role => (
+                                            <div key={role.id} className="flex items-start space-x-2 p-1 hover:bg-gray-50 rounded">
+                                                <Checkbox
+                                                    id={`role-${role.id}`}
+                                                    checked={isAssigned(role.id)}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleToggleRole(role.id, e.target.checked)}
+                                                />
+                                                <div className="grid gap-1 leading-none">
+                                                    <label
+                                                        htmlFor={`role-${role.id}`}
+                                                        className="text-sm font-medium leading-none cursor-pointer"
+                                                    >
+                                                        {role.name}
+                                                        {role.is_system && <span className="ml-2 text-[10px] bg-gray-100 text-gray-500 px-1 rounded font-normal">System</span>}
+                                                    </label>
+                                                    {role.description && (
+                                                        <p className="text-[11px] text-gray-500 leading-tight">
+                                                            {role.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
                                     </div>
-                                ))}
+                                )}
+
+                                {/* Business Roles Section */}
+                                {availableRoles.filter(r => r.role_type === 'business').length > 0 && (
+                                    <div className="space-y-2 pt-2 border-t">
+                                        <h4 className="text-[10px] font-bold uppercase tracking-wider text-blue-400">Business Roles</h4>
+                                        {availableRoles.filter(r => r.role_type === 'business').map(role => (
+                                            <div key={role.id} className="flex items-start space-x-2 p-1 hover:bg-blue-50/30 rounded">
+                                                <Checkbox
+                                                    id={`role-${role.id}`}
+                                                    checked={isAssigned(role.id)}
+                                                    onChange={(e: React.ChangeEvent<HTMLInputElement>) => handleToggleRole(role.id, e.target.checked)}
+                                                />
+                                                <div className="grid gap-1 leading-none">
+                                                    <label
+                                                        htmlFor={`role-${role.id}`}
+                                                        className="text-sm font-medium leading-none cursor-pointer text-blue-700"
+                                                    >
+                                                        {role.name}
+                                                    </label>
+                                                    {role.description && (
+                                                        <p className="text-[11px] text-gray-500 leading-tight">
+                                                            {role.description}
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                )}
+
+                                {availableRoles.length === 0 && (
+                                    <div className="text-center py-4 text-sm text-gray-400">
+                                        No roles available
+                                    </div>
+                                )}
                             </div>
                         )}
                     </div>

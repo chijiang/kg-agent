@@ -130,7 +130,7 @@ class PGGraphStorage:
 
         return {
             "id": entity.id,
-            "name": entity.name,
+            "name": entity._display_name,  # Map _display_name to name for compat
             "entity_type": entity.entity_type,
             "properties": {
                 k: v
@@ -149,12 +149,18 @@ class PGGraphStorage:
         actor_type: str | None = None,
     ) -> Dict[str, Any]:
         """更新实体属性并触发事件"""
-        # 尝试按 ID 或 name 查找
-        query = select(GraphEntity).where(GraphEntity.entity_type == entity_type)
-        if entity_id.isdigit():
-            query = query.where(GraphEntity.id == int(entity_id))
-        else:
-            query = query.where(GraphEntity.name == entity_id)
+        # STRICT ID POLICY: Only allow updates by numeric ID
+        # exception: if we really want to update by name... but user said strict ID.
+
+        if not entity_id.isdigit():
+            logger.warning(
+                f"update_entity: Non-numeric ID provided: {entity_id}. Update ignored."
+            )
+            return {}
+
+        query = select(GraphEntity).where(
+            GraphEntity.id == int(entity_id), GraphEntity.entity_type == entity_type
+        )
 
         result = await self.db.execute(query)
         entity = result.scalar_one_or_none()
@@ -164,16 +170,42 @@ class PGGraphStorage:
 
         old_values = (entity.properties or {}).copy()
 
+        # Handle special case: if updating "name", actually update _display_name column
+        if "name" in updates:
+            # We don't want "name" in properties if it corresponds to the column
+            # BUT, the user might want to store "name" property as well?
+            # User said: "prevent some class have own name property conflict"
+            # So GraphEntity.name is now _display_name.
+            # If user passes "name" in updates, we should probably update _display_name
+            # AND ALSO store it in properties if they want?
+            # Let's assume "name" in updates means setting the display name.
+            new_display_name = updates.pop("name")
+            # Update the column
+            await self.db.execute(
+                update(GraphEntity)
+                .where(GraphEntity.id == int(entity_id))
+                .values(_display_name=new_display_name)
+            )
+            # Re-fetch or manually update entity object for event emission?
+            # Let's just emit event for "name"
+            if entity._display_name != new_display_name:
+                await self._emit_update_event(
+                    entity_type,
+                    entity_id,
+                    "name",  # still call it name for events? or _display_name? Let's stick to name for compat
+                    entity._display_name,
+                    new_display_name,
+                    actor_name=actor_name,
+                    actor_type=actor_type,
+                )
+
         # 合并更新
         new_properties = {**old_values, **updates}
 
-        await self.db.execute(
-            update(GraphEntity)
-            .where(
-                GraphEntity.name == entity_id, GraphEntity.entity_type == entity_type
-            )
-            .values(properties=new_properties)
-        )
+        # Prepare update query for properties
+        update_stmt = update(GraphEntity).where(GraphEntity.id == int(entity_id))
+        await self.db.execute(update_stmt.values(properties=new_properties))
+
         await self.db.commit()
 
         # 触发事件
@@ -194,7 +226,9 @@ class PGGraphStorage:
 
     # ==================== Schema 查询 ====================
 
-    async def get_ontology_classes(self, accessible_entity_types: List[str] = None) -> List[Dict]:
+    async def get_ontology_classes(
+        self, accessible_entity_types: List[str] = None
+    ) -> List[Dict]:
         """获取所有类定义"""
         query = select(SchemaClass)
 
@@ -233,23 +267,40 @@ class PGGraphStorage:
 
         return classes_data
 
-    async def get_ontology_relationships(self) -> List[Dict]:
+    async def get_ontology_relationships(
+        self, accessible_entity_types: List[str] = None
+    ) -> List[Dict]:
         """获取所有关系定义"""
-        result = await self.db.execute(
-            select(
-                SchemaClass.name.label("source_class"),
-                SchemaRelationship.relationship_type.label("relationship"),
-                SchemaClass.name.label("target_class"),
-            ).join(
-                SchemaRelationship, SchemaClass.id == SchemaRelationship.source_class_id
-            )
-        )
-        # 需要更复杂的查询来同时获取 source 和 target
-        result = await self.db.execute(
+        query = (
             select(SchemaRelationship)
             .options(selectinload(SchemaRelationship.source_class))
             .options(selectinload(SchemaRelationship.target_class))
         )
+
+        # 添加实体类型过滤：源和目标都必须是可访问的
+        if accessible_entity_types is not None and accessible_entity_types:
+            from sqlalchemy.orm import aliased
+
+            SourceClass = aliased(SchemaClass)
+            TargetClass = aliased(SchemaClass)
+
+            query = (
+                select(SchemaRelationship)
+                .options(
+                    selectinload(SchemaRelationship.source_class),
+                    selectinload(SchemaRelationship.target_class),
+                )
+                .join(SourceClass, SourceClass.id == SchemaRelationship.source_class_id)
+                .join(TargetClass, TargetClass.id == SchemaRelationship.target_class_id)
+                .where(
+                    and_(
+                        SourceClass.name.in_(accessible_entity_types),
+                        TargetClass.name.in_(accessible_entity_types),
+                    )
+                )
+            )
+
+        result = await self.db.execute(query)
         rels = result.scalars().all()
         rels_data = [
             {
@@ -280,8 +331,15 @@ class PGGraphStorage:
 
         return rels_data
 
-    async def describe_class(self, class_name: str) -> Dict:
+    async def describe_class(
+        self, class_name: str, accessible_entity_types: List[str] = None
+    ) -> Dict:
         """描述一个类的定义"""
+        # 检查当前类是否可访问
+        if accessible_entity_types is not None and accessible_entity_types:
+            if class_name not in accessible_entity_types:
+                return {"error": f"Class '{class_name}' access denied"}
+
         # 获取类信息
         result = await self.db.execute(
             select(SchemaClass).where(SchemaClass.name == class_name)
@@ -298,7 +356,7 @@ class PGGraphStorage:
         }
 
         # 获取该类的关系
-        result = await self.db.execute(
+        query = (
             select(SchemaRelationship)
             .options(selectinload(SchemaRelationship.source_class))
             .options(selectinload(SchemaRelationship.target_class))
@@ -309,21 +367,35 @@ class PGGraphStorage:
                 )
             )
         )
+
+        # 过滤关系：目标的另一端类也必须可访问
+        result = await self.db.execute(query)
         rels = result.scalars().all()
         relationships_data = []
         for r in rels:
+            source_name = r.source_class.name
+            target_name = r.target_class.name
+
+            # 只有当两端都可访问时才显示关系
+            if accessible_entity_types is not None and accessible_entity_types:
+                if (
+                    source_name not in accessible_entity_types
+                    or target_name not in accessible_entity_types
+                ):
+                    continue
+
             if r.source_class_id == cls.id:
                 relationships_data.append(
                     {
                         "relationship": r.relationship_type,
-                        "target_class": r.target_class.name,
+                        "target_class": target_name,
                     }
                 )
             else:
                 relationships_data.append(
                     {
                         "relationship": r.relationship_type,
-                        "source_class": r.source_class.name,
+                        "source_class": source_name,
                     }
                 )
 
@@ -524,11 +596,11 @@ class PGGraphStorage:
         from sqlalchemy import or_
 
         # 搜索名称或别名
-        # 因为 properties['__aliases__'] 是 JSONB 数组，我们检查是否包含该词或数组元素匹配
+        # _display_name (mapped to name column) OR aliases
         query = select(GraphEntity).where(
             or_(
-                GraphEntity.name.ilike(f"%{search_term}%"),
-                # PostgreSQL JSONB 搜索：由于 ILIKE 很难直接应用于数组元素，这里我们使用通用 SQL
+                GraphEntity._display_name.ilike(f"%{search_term}%"),
+                # PostgreSQL JSONB 搜索
                 text(
                     "id IN (SELECT id FROM graph_entities, jsonb_array_elements_text(properties->'__aliases__') as a WHERE a ILIKE :term)"
                 ),
@@ -546,7 +618,7 @@ class PGGraphStorage:
         results = [
             {
                 "id": e.id,
-                "name": e.name,
+                "name": e._display_name,  # Return _display_name as name
                 "labels": [e.entity_type],
                 "aliases": (e.properties or {}).get("__aliases__", []),
                 "properties": {
@@ -579,7 +651,8 @@ class PGGraphStorage:
 
     async def get_instance_neighbors(
         self,
-        instance_name: str,
+        entity_id: Optional[int] = None,
+        entity_name: Optional[str] = None,
         hops: int = 1,
         direction: str = "both",
         entity_type: Optional[str] = None,
@@ -604,34 +677,60 @@ class PGGraphStorage:
         # 对于 1 跳查询，直接使用 JOIN
         if hops == 1:
             return await self._get_one_hop_neighbors(
-                instance_name, direction, entity_type, property_filter
+                direction,
+                entity_type,
+                property_filter,
+                entity_id=entity_id,
+                entity_name=entity_name,
             )
 
         # 对于多跳查询，使用构建的方式
         return await self._get_multi_hop_neighbors(
-            instance_name, hops, direction, entity_type, property_filter
+            hops,
+            direction,
+            entity_type,
+            property_filter,
+            entity_id=entity_id,
+            entity_name=entity_name,
         )
 
     async def _get_one_hop_neighbors(
         self,
-        instance_name: str,
         direction: str,
         entity_type: Optional[str] = None,
         property_filter: Optional[Dict[str, Any]] = None,
+        entity_id: Optional[int] = None,
+        entity_name: Optional[str] = None,
     ) -> List[Dict]:
         """获取 1 跳邻居（简化实现）"""
         # 先获取起始节点
-        # 先获取起始节点
-        result = await self.db.execute(
-            select(GraphEntity).where(
-                GraphEntity.name == instance_name, GraphEntity.is_instance == True
+        if entity_id is not None:
+            # Try by ID first
+            result = await self.db.execute(
+                select(GraphEntity).where(
+                    GraphEntity.id == entity_id,
+                    GraphEntity.is_instance == True,
+                )
             )
-        )
-        start_entity = result.scalar_one_or_none()
+            start_entity = result.scalar_one_or_none()
+        else:
+            start_entity = None
+
+        if not start_entity and entity_name is not None:
+            # Try by display name
+            result = await self.db.execute(
+                select(GraphEntity).where(
+                    GraphEntity._display_name == entity_name,
+                    GraphEntity.is_instance == True,
+                )
+            )
+            start_entity = result.scalar_one_or_none()
+
         if not start_entity:
             return []
 
         start_node = start_entity.id
+        instance_name_resolved = start_entity._display_name
 
         # 根据方向查询关系
         if direction == "outgoing":
@@ -695,14 +794,14 @@ class PGGraphStorage:
                                 "id": rel.id,
                                 "type": rel.relationship_type,
                                 "source": (
-                                    instance_name
+                                    instance_name_resolved
                                     if direction == "outgoing"
                                     else entity.name
                                 ),
                                 "target": (
                                     entity.name
                                     if direction == "outgoing"
-                                    else instance_name
+                                    else instance_name_resolved
                                 ),
                             }
                         ],
@@ -741,7 +840,7 @@ class PGGraphStorage:
                     neighbors.append(
                         {
                             "id": entity.id,
-                            "name": entity.name,
+                            "name": entity._display_name,
                             "labels": [entity.entity_type],
                             "properties": {
                                 k: v
@@ -753,14 +852,14 @@ class PGGraphStorage:
                                     "id": rel.id,
                                     "type": rel.relationship_type,
                                     "source": (
-                                        instance_name
+                                        instance_name_resolved
                                         if rel.source_id == start_node
-                                        else entity.name
+                                        else entity._display_name
                                     ),
                                     "target": (
-                                        entity.name
+                                        entity._display_name
                                         if rel.source_id == start_node
-                                        else instance_name
+                                        else instance_name_resolved
                                     ),
                                 }
                             ],
@@ -774,8 +873,8 @@ class PGGraphStorage:
         # 起始节点
         viz_nodes.append(
             {
-                "id": instance_name,
-                "label": instance_name,
+                "id": instance_name_resolved,
+                "label": instance_name_resolved,
                 "type": start_entity.entity_type,
                 "properties": {
                     k: v
@@ -810,20 +909,36 @@ class PGGraphStorage:
 
     async def _get_multi_hop_neighbors(
         self,
-        instance_name: str,
         hops: int,
         direction: str,
         entity_type: Optional[str] = None,
         property_filter: Optional[Dict[str, Any]] = None,
+        entity_id: Optional[int] = None,
+        entity_name: Optional[str] = None,
     ) -> List[Dict]:
         """获取多跳邻居（使用 SQL 原生查询）"""
-        # 获取起始节点 ID
-        result = await self.db.execute(
-            select(GraphEntity).where(
-                GraphEntity.name == instance_name, GraphEntity.is_instance == True
+        if instance_name.isdigit():
+            # Try by ID first
+            result = await self.db.execute(
+                select(GraphEntity).where(
+                    GraphEntity.id == int(instance_name),
+                    GraphEntity.is_instance == True,
+                )
             )
-        )
-        start_entity = result.scalar_one_or_none()
+            start_entity = result.scalar_one_or_none()
+        else:
+            start_entity = None
+
+        if not start_entity:
+            # Try by display name
+            result = await self.db.execute(
+                select(GraphEntity).where(
+                    GraphEntity._display_name == instance_name,
+                    GraphEntity.is_instance == True,
+                )
+            )
+            start_entity = result.scalar_one_or_none()
+
         if not start_entity:
             return []
 
@@ -865,7 +980,7 @@ class PGGraphStorage:
             -- 基础：起始节点
             SELECT
                 e.id,
-                e.name,
+                e._display_name as name,
                 e.entity_type,
                 e.properties,
                 1 as depth,
@@ -880,7 +995,7 @@ class PGGraphStorage:
             -- 递归：查找邻居
             SELECT
                 CASE WHEN r.source_id = ns.id THEN r.target_id ELSE r.source_id END as id,
-                CASE WHEN r.source_id = ns.id THEN t.name ELSE s.name END as name,
+                CASE WHEN r.source_id = ns.id THEN t._display_name ELSE s._display_name END as name,
                 CASE WHEN r.source_id = ns.id THEN t.entity_type ELSE s.entity_type END as entity_type,
                 CASE WHEN r.source_id = ns.id THEN t.properties ELSE s.properties END as properties,
                 ns.depth + 1 as depth,
@@ -979,8 +1094,10 @@ class PGGraphStorage:
 
     async def find_path_between_instances(
         self,
-        start_name: str,
-        end_name: str,
+        start_id: Optional[int] = None,
+        start_name: Optional[str] = None,
+        end_id: Optional[int] = None,
+        end_name: Optional[str] = None,
         max_depth: int = 5,
     ) -> Optional[Dict]:
         """查找两个实例之间的最短路径
@@ -988,21 +1105,49 @@ class PGGraphStorage:
         使用递归 CTE 实现 BFS 最短路径查找。
         """
         # 获取起点和终点节点
-        result = await self.db.execute(
-            select(GraphEntity.id, GraphEntity.name, GraphEntity.entity_type).where(
-                GraphEntity.name == start_name, GraphEntity.is_instance == True
+        if start_id is not None:
+            result = await self.db.execute(
+                select(
+                    GraphEntity.id, GraphEntity._display_name, GraphEntity.entity_type
+                ).where(GraphEntity.id == start_id, GraphEntity.is_instance == True)
             )
-        )
-        start = result.one_or_none()
+            start = result.one_or_none()
+        else:
+            start = None
+
+        if not start and start_name is not None:
+            result = await self.db.execute(
+                select(
+                    GraphEntity.id, GraphEntity._display_name, GraphEntity.entity_type
+                ).where(
+                    GraphEntity._display_name == start_name,
+                    GraphEntity.is_instance == True,
+                )
+            )
+            start = result.one_or_none()
         if not start:
             return None
 
-        result = await self.db.execute(
-            select(GraphEntity.id, GraphEntity.name, GraphEntity.entity_type).where(
-                GraphEntity.name == end_name, GraphEntity.is_instance == True
+        if end_id is not None:
+            result = await self.db.execute(
+                select(
+                    GraphEntity.id, GraphEntity._display_name, GraphEntity.entity_type
+                ).where(GraphEntity.id == end_id, GraphEntity.is_instance == True)
             )
-        )
-        end = result.one_or_none()
+            end = result.one_or_none()
+        else:
+            end = None
+
+        if not end and end_name is not None:
+            result = await self.db.execute(
+                select(
+                    GraphEntity.id, GraphEntity._display_name, GraphEntity.entity_type
+                ).where(
+                    GraphEntity._display_name == end_name,
+                    GraphEntity.is_instance == True,
+                )
+            )
+            end = result.one_or_none()
         if not end:
             return None
 
@@ -1013,10 +1158,10 @@ class PGGraphStorage:
             -- 起点
             SELECT
                 s.id as current_id,
-                s.name as current_name,
+                s._display_name as current_name,
                 s.entity_type as current_type,
                 ARRAY[s.id] as path_ids,
-                ARRAY[s.name] as path_names,
+                ARRAY[s._display_name] as path_names,
                 ARRAY[s.entity_type] as path_labels,
                 ARRAY[]::text[] as rel_types,
                 0 as depth
@@ -1032,8 +1177,8 @@ class PGGraphStorage:
                     ELSE r.source_id
                 END as current_id,
                 CASE
-                    WHEN r.source_id = sp.current_id THEN t.name
-                    ELSE s.name
+                    WHEN r.source_id = sp.current_id THEN t._display_name
+                    ELSE s._display_name
                 END as current_name,
                 CASE
                     WHEN r.source_id = sp.current_id THEN t.entity_type
@@ -1044,8 +1189,8 @@ class PGGraphStorage:
                     ELSE r.source_id
                 END as path_ids,
                 sp.path_names || CASE
-                    WHEN r.source_id = sp.current_id THEN t.name
-                    ELSE s.name
+                    WHEN r.source_id = sp.current_id THEN t._display_name
+                    ELSE s._display_name
                 END as path_names,
                 sp.path_labels || CASE
                     WHEN r.source_id = sp.current_id THEN t.entity_type
@@ -1062,15 +1207,15 @@ class PGGraphStorage:
         )
         SELECT path_names, path_labels, rel_types, path_ids
         FROM shortest_path
-        WHERE path_names[array_length(path_names, 1)] = :end_name
-        ORDER BY array_length(path_names, 1) ASC
+        WHERE path_ids[array_length(path_ids, 1)] = :end_id
+        ORDER BY array_length(path_ids, 1) ASC
         LIMIT 1
         """
         )
 
         result = await self.db.execute(
             path_query,
-            {"start_id": start[0], "end_name": end_name, "max_depth": max_depth},
+            {"start_id": start[0], "end_id": end[0], "max_depth": max_depth},
         )
         row = result.first()
 
@@ -1130,7 +1275,7 @@ class PGGraphStorage:
         results = [
             {
                 "id": e.id,
-                "name": e.name,
+                "name": e._display_name,
                 "entity_type": e.entity_type,
                 "properties": {
                     k: v
@@ -1164,7 +1309,7 @@ class PGGraphStorage:
     ) -> Optional[Dict]:
         """根据名称获取实体详情"""
         query = select(GraphEntity).where(
-            GraphEntity.name == name, GraphEntity.is_instance == True
+            GraphEntity._display_name == name, GraphEntity.is_instance == True
         )
         if entity_type:
             query = query.where(GraphEntity.entity_type == entity_type)
@@ -1177,7 +1322,7 @@ class PGGraphStorage:
 
         return {
             "id": entity.id,
-            "name": entity.name,
+            "name": entity._display_name,
             "entity_type": entity.entity_type,
             "properties": {
                 k: v
@@ -1203,7 +1348,7 @@ class PGGraphStorage:
 
             # 获取样本名称
             result = await self.db.execute(
-                select(GraphEntity.name)
+                select(GraphEntity._display_name)
                 .where(
                     GraphEntity.entity_type == node_label,
                     GraphEntity.is_instance == True,
@@ -1272,13 +1417,12 @@ class PGGraphStorage:
             "total_schema_relationships": schema_rel_count,
         }
 
-    async def get_random_graph(self, limit: int = 100, accessible_entity_types: List[str] = None) -> Dict[str, List[Dict]]:
+    async def get_random_graph(
+        self, limit: int = 100, accessible_entity_types: List[str] = None
+    ) -> Dict[str, List[Dict]]:
         """获取随机的实例图谱片段（节点 + 关系）"""
         # 1. 随机获取一些节点
-        query = (
-            select(GraphEntity)
-            .where(GraphEntity.is_instance == True)
-        )
+        query = select(GraphEntity).where(GraphEntity.is_instance == True)
 
         # 添加实体类型过滤
         if accessible_entity_types is not None and accessible_entity_types:
@@ -1308,8 +1452,8 @@ class PGGraphStorage:
         nodes_data = [
             {
                 "id": e.id,
-                "name": e.name,
-                "label": e.name,
+                "name": e._display_name,
+                "label": e._display_name,
                 "nodeLabel": e.entity_type,
                 "labels": [e.entity_type],
                 "properties": {

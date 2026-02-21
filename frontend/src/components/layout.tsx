@@ -67,11 +67,11 @@ export function AppLayout({ children, noPadding = false }: { children: React.Rea
     // Filter items based on permissions
     const filteredItems = items.filter(item => hasPageAccess(item.id))
 
-    // Only show admin links to admin users
-    if (user?.is_admin || permissions?.is_admin) {
+    // Only show admin links to admin users or those with admin page permission
+    if (user?.is_admin || permissions?.is_admin || hasPageAccess('admin')) {
       filteredItems.push(
-        { id: 'admin_users', href: `/${locale}/admin/users`, label: '用户管理', icon: Users },
-        { id: 'admin_roles', href: `/${locale}/admin/roles`, label: '角色管理', icon: Shield }
+        { id: 'admin_users', href: `/${locale}/admin/users`, label: t('nav.users'), icon: Users },
+        { id: 'admin_roles', href: `/${locale}/admin/roles`, label: t('nav.roles'), icon: Shield }
       )
     }
 

@@ -3,7 +3,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, or_
 from sqlalchemy.orm import selectinload
 from app.models.user import User
-from app.models.role import Role, UserRole, RolePagePermission, RoleActionPermission, RoleEntityPermission
+from app.models.role import (
+    Role,
+    UserRole,
+    RolePagePermission,
+    RoleActionPermission,
+    RoleEntityPermission,
+)
 from app.rule_engine.action_registry import ActionRegistry
 from typing import List, Dict, Optional
 
@@ -32,7 +38,14 @@ class PageId:
 
     @classmethod
     def all(cls) -> List[str]:
-        return [cls.CHAT, cls.RULES, cls.ACTIONS, cls.DATA_PRODUCTS, cls.ONTOLOGY, cls.ADMIN]
+        return [
+            cls.CHAT,
+            cls.RULES,
+            cls.ACTIONS,
+            cls.DATA_PRODUCTS,
+            cls.ONTOLOGY,
+            cls.ADMIN,
+        ]
 
 
 class PermissionService:
@@ -73,16 +86,15 @@ class PermissionService:
         result = await db.execute(
             select(RolePagePermission)
             .join(UserRole, UserRole.role_id == RolePagePermission.role_id)
-            .where(
-                UserRole.user_id == user.id,
-                RolePagePermission.page_id == page_id
-            )
+            .where(UserRole.user_id == user.id, RolePagePermission.page_id == page_id)
             .limit(1)
         )
         return result.scalar_one_or_none() is not None
 
     @staticmethod
-    async def get_accessible_actions(db: AsyncSession, user: User) -> Dict[str, List[str]]:
+    async def get_accessible_actions(
+        db: AsyncSession, user: User
+    ) -> Dict[str, List[str]]:
         """获取用户可执行的Action，返回 {entity_type: [action_names]}"""
         if user.is_admin:
             # Admin拥有所有action权限
@@ -98,11 +110,12 @@ class PermissionService:
                 result[action.entity_type].append(action.action_name)
             return result
 
-        # 获取用户角色的action权限
+        # 获取用户业务角色的action权限
         result = await db.execute(
             select(RoleActionPermission)
             .join(UserRole, UserRole.role_id == RoleActionPermission.role_id)
-            .where(UserRole.user_id == user.id)
+            .join(Role, Role.id == RoleActionPermission.role_id)
+            .where(UserRole.user_id == user.id, Role.role_type == "business")
             .distinct()
         )
         permissions = result.scalars().all()
@@ -112,16 +125,20 @@ class PermissionService:
         for perm in permissions:
             if perm.entity_type not in actions_dict:
                 actions_dict[perm.entity_type] = []
-            actions_dict[perm.entity_type].append(perm.action_name)
+
+            # Normalize action name: strip prefix if it exists (e.g., "PurchaseOrder.submit" -> "submit")
+            action_name = perm.action_name
+            if "." in action_name:
+                action_name = action_name.split(".")[-1]
+
+            if action_name not in actions_dict[perm.entity_type]:
+                actions_dict[perm.entity_type].append(action_name)
 
         return actions_dict
 
     @staticmethod
     async def check_action_permission(
-        db: AsyncSession,
-        user: User,
-        entity_type: str,
-        action_name: str
+        db: AsyncSession, user: User, entity_type: str, action_name: str
     ) -> bool:
         """检查用户是否有指定Action的执行权限"""
         if user.is_admin:
@@ -133,7 +150,10 @@ class PermissionService:
             .where(
                 UserRole.user_id == user.id,
                 RoleActionPermission.entity_type == entity_type,
-                RoleActionPermission.action_name == action_name
+                or_(
+                    RoleActionPermission.action_name == action_name,
+                    RoleActionPermission.action_name == f"{entity_type}.{action_name}",
+                ),
             )
             .limit(1)
         )
@@ -146,24 +166,22 @@ class PermissionService:
             # Admin拥有所有实体类型的访问权限
             # 从GraphEntity表获取所有类名
             from app.models.graph import GraphEntity
-            result = await db.execute(
-                select(GraphEntity.entity_type).distinct()
-            )
+
+            result = await db.execute(select(GraphEntity.entity_type).distinct())
             return list({row[0] for row in result.all() if row[0]})
 
         result = await db.execute(
             select(RoleEntityPermission.entity_class_name)
             .join(UserRole, UserRole.role_id == RoleEntityPermission.role_id)
-            .where(UserRole.user_id == user.id)
+            .join(Role, Role.id == RoleEntityPermission.role_id)
+            .where(UserRole.user_id == user.id, Role.role_type == "business")
             .distinct()
         )
         return [row[0] for row in result.all()]
 
     @staticmethod
     async def check_entity_access(
-        db: AsyncSession,
-        user: User,
-        entity_class_name: str
+        db: AsyncSession, user: User, entity_class_name: str
     ) -> bool:
         """检查用户是否有指定实体类型的访问权限"""
         if user.is_admin:
@@ -174,7 +192,7 @@ class PermissionService:
             .join(UserRole, UserRole.role_id == RoleEntityPermission.role_id)
             .where(
                 UserRole.user_id == user.id,
-                RoleEntityPermission.entity_class_name == entity_class_name
+                RoleEntityPermission.entity_class_name == entity_class_name,
             )
             .limit(1)
         )
@@ -191,5 +209,5 @@ class PermissionService:
             "accessible_pages": accessible_pages,
             "accessible_actions": accessible_actions,
             "accessible_entities": accessible_entities,
-            "is_admin": user.is_admin
+            "is_admin": user.is_admin,
         }

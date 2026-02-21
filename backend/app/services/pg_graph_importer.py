@@ -246,13 +246,13 @@ class PGGraphImporter:
                 # 检查是否已存在
                 existing = await self.db.execute(
                     select(GraphEntity).where(
-                        GraphEntity.name == node["name"],
+                        GraphEntity._display_name == node["name"],
                         GraphEntity.entity_type == class_name,
                     )
                 )
                 if not existing.scalar_one_or_none():
                     new_entity = GraphEntity(
-                        name=node["name"],
+                        _display_name=node["name"],
                         entity_type=class_name,
                         is_instance=True,
                         properties=node["props"],
@@ -299,7 +299,7 @@ class PGGraphImporter:
     async def _build_entity_cache(self):
         """构建实体名称到 ID 的缓存"""
         result = await self.db.execute(
-            select(GraphEntity.id, GraphEntity.name).where(
+            select(GraphEntity.id, GraphEntity._display_name).where(
                 GraphEntity.is_instance == True
             )
         )

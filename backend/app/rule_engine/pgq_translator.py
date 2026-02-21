@@ -201,9 +201,9 @@ class PGQTranslator:
             EXISTS (
                 SELECT 1 FROM graph_relationships r
                 JOIN graph_entities t ON t.id = r.target_id
-                WHERE r.source_id = (SELECT id FROM graph_entities WHERE name = 'po')
+                WHERE r.source_id = (SELECT id FROM graph_entities WHERE _display_name = 'po')
                 AND r.relationship_type = 'orderedFrom'
-                AND t.name = 's'
+                AND t._display_name = 's'
             )
 
         Args:
@@ -419,6 +419,9 @@ class PGQTranslator:
             "properties",
             "source_id",
         }
+        if attr == "name":
+            return f"{alias}._display_name"
+
         if attr in base_cols and len(parts) == 2:
             return f"{alias}.{attr}"
 
@@ -730,7 +733,7 @@ class PGQueryBuilder:
 
         return f"""
         SELECT DISTINCT
-            n.name,
+            n._display_name as name,
             n.entity_type,
             n.properties,
             r.relationship_type
@@ -739,7 +742,7 @@ class PGQueryBuilder:
         JOIN graph_entities n ON (
             CASE WHEN r.source_id = e.id THEN r.target_id ELSE r.source_id END = n.id
         )
-        WHERE e.name = '{start_node}'
+        WHERE e._display_name = '{start_node}'
         AND e.is_instance = true
         {rel_filter}
         LIMIT 100
@@ -761,12 +764,12 @@ class PGQueryBuilder:
         WITH RECURSIVE path_search AS (
             SELECT
                 s.id,
-                s.name,
+                s._display_name as name,
                 ARRAY[s.id] as path_ids,
-                ARRAY[s.name] as path_names,
+                ARRAY[s._display_name] as path_names,
                 0 as depth
             FROM graph_entities s
-            WHERE s.name = '{start_name}' AND s.is_instance = true
+            WHERE s._display_name = '{start_name}' AND s.is_instance = true
 
             UNION ALL
 
@@ -776,11 +779,11 @@ class PGQueryBuilder:
                     ELSE r.source_id
                 END as id,
                 CASE
-                    WHEN r.source_id = ps.id THEN t.name
-                    ELSE s.name
+                    WHEN r.source_id = ps.id THEN t._display_name
+                    ELSE s._display_name
                 END as name,
                 ps.path_ids || CASE WHEN r.source_id = ps.id THEN r.target_id ELSE r.source_id END,
-                ps.path_names || CASE WHEN r.source_id = ps.id THEN t.name ELSE s.name END,
+                ps.path_names || CASE WHEN r.source_id = ps.id THEN t._display_name ELSE s._display_name END,
                 ps.depth + 1
             FROM path_search ps
             JOIN graph_relationships r ON (r.source_id = ps.id OR r.target_id = ps.id)

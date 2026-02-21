@@ -62,7 +62,7 @@ async def get_instance_neighbors(
     """Get neighbors of an instance.
 
     Args:
-        instance_name: Name of the instance
+        instance_name: Name or ID of the instance
         hops: Number of hops to traverse (default: 1)
         direction: Direction of traversal: 'incoming', 'outgoing', or 'both' (default: 'both')
         type: Optional, filter neighbors by entity type
@@ -70,13 +70,18 @@ async def get_instance_neighbors(
     """
     async with get_storage() as storage:
         # Note: 'type' argument maps to 'entity_type' in storage
-        return await storage.get_instance_neighbors(
-            instance_name,
-            hops,
-            direction,
-            entity_type=type,
-            property_filter=property_filter,
-        )
+        kwargs = {
+            "hops": hops,
+            "direction": direction,
+            "entity_type": type,
+            "property_filter": property_filter,
+        }
+        if instance_name.isdigit():
+            kwargs["entity_id"] = int(instance_name)
+        else:
+            kwargs["entity_name"] = instance_name
+
+        return await storage.get_instance_neighbors(**kwargs)
 
 
 @mcp.tool()
@@ -86,14 +91,23 @@ async def find_path_between_instances(
     """Find path between two instances.
 
     Args:
-        start_name: Name of start instance
-        end_name: Name of end instance
+        start_name: Name or ID of start instance
+        end_name: Name or ID of end instance
         max_depth: Maximum path length (default: 5)
     """
     async with get_storage() as storage:
-        return await storage.find_path_between_instances(
-            start_name, end_name, max_depth
-        )
+        kwargs = {"max_depth": max_depth}
+        if start_name.isdigit():
+            kwargs["start_id"] = int(start_name)
+        else:
+            kwargs["start_name"] = start_name
+
+        if end_name.isdigit():
+            kwargs["end_id"] = int(end_name)
+        else:
+            kwargs["end_name"] = end_name
+
+        return await storage.find_path_between_instances(**kwargs)
 
 
 @mcp.tool()

@@ -7,6 +7,7 @@ import { rolesApi, RoleDetail } from '@/lib/api'
 import { ProtectedPage } from '@/components/auth/ProtectedPage'
 import { AppLayout } from '@/components/layout'
 import { RolePermissionEditor } from '../components/RolePermissionEditor'
+import { BusinessRolePermissionEditor } from '../components/BusinessRolePermissionEditor'
 
 export default function RoleDetailPage() {
   const params = useParams()
@@ -36,7 +37,11 @@ export default function RoleDetailPage() {
     <AppLayout>
       <ProtectedPage pageId="admin">
         <div className="container mx-auto py-6">
-          <RolePermissionEditor role={role} onUpdated={loadRole} />
+          {role.role_type === 'business' ? (
+            <BusinessRolePermissionEditor role={role} onUpdated={loadRole} />
+          ) : (
+            <RolePermissionEditor role={role} onUpdated={loadRole} />
+          )}
         </div>
       </ProtectedPage>
     </AppLayout>

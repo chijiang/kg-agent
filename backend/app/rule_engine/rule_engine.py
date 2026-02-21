@@ -299,6 +299,9 @@ class RuleEngine:
                 # Access by column name
                 entity_id = record.get("id")
                 entity_name = record.get("name")
+                if not entity_name:
+                    entity_name = record.get("_display_name")
+
                 raw_props = record.get("properties") or {}
                 source_id = record.get("source_id")
 

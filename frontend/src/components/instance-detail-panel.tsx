@@ -134,7 +134,8 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
                 return
             }
 
-            await graphApi.updateEntity(node.nodeLabel, node.name, updates, token)
+            const entityId = String(metadata.ID || node.id || node.name)
+            await graphApi.updateEntity(node.nodeLabel, entityId, updates, token)
             toast.success(t('components.instance.propertiesUpdated'))
             setExpandedProps({ ...editedProperties })
             setOriginalAliases([...editingAliases])
@@ -178,10 +179,11 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
 
         try {
             const params = actionParams[actionKey] || {}
+            const entityId = String(metadata.ID || node.id || node.name)
             const res = await actionsApi.execute(
                 action.entity_type,
                 action.action_name,
-                node.name,
+                entityId,
                 expandedProps,
                 params
             )

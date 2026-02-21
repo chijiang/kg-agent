@@ -24,8 +24,15 @@ class Role(Base):
     name: Mapped[str] = mapped_column(String(50), unique=True, nullable=False)
     description: Mapped[str | None] = mapped_column(String(500), nullable=True)
     is_system: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    role_type: Mapped[str] = mapped_column(
+        String(20), default="system", nullable=False
+    )  # "system" or "business"
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False
+    )
 
 
 class UserRole(Base):
@@ -37,12 +44,20 @@ class UserRole(Base):
     __tablename__ = "user_roles"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    user_id: Mapped[int] = mapped_column(ForeignKey('users.id', ondelete='CASCADE'), nullable=False)
-    role_id: Mapped[int] = mapped_column(ForeignKey('roles.id', ondelete='CASCADE'), nullable=False)
-    assigned_by: Mapped[int | None] = mapped_column(ForeignKey('users.id'), nullable=True)
-    assigned_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
+    assigned_by: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id"), nullable=True
+    )
+    assigned_at: Mapped[datetime] = mapped_column(
+        DateTime, default=datetime.utcnow, nullable=False
+    )
 
-    __table_args__ = (UniqueConstraint('user_id', 'role_id', name='uq_user_role'),)
+    __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_user_role"),)
 
 
 class RolePagePermission(Base):
@@ -54,10 +69,12 @@ class RolePagePermission(Base):
     __tablename__ = "role_page_permissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    role_id: Mapped[int] = mapped_column(ForeignKey('roles.id', ondelete='CASCADE'), nullable=False)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
     page_id: Mapped[str] = mapped_column(String(50), nullable=False)
 
-    __table_args__ = (UniqueConstraint('role_id', 'page_id', name='uq_role_page'),)
+    __table_args__ = (UniqueConstraint("role_id", "page_id", name="uq_role_page"),)
 
 
 class RoleActionPermission(Base):
@@ -69,11 +86,17 @@ class RoleActionPermission(Base):
     __tablename__ = "role_action_permissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    role_id: Mapped[int] = mapped_column(ForeignKey('roles.id', ondelete='CASCADE'), nullable=False)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
     entity_type: Mapped[str] = mapped_column(String(100), nullable=False)
     action_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    __table_args__ = (UniqueConstraint('role_id', 'entity_type', 'action_name', name='uq_role_action'),)
+    __table_args__ = (
+        UniqueConstraint(
+            "role_id", "entity_type", "action_name", name="uq_role_action"
+        ),
+    )
 
 
 class RoleEntityPermission(Base):
@@ -85,7 +108,11 @@ class RoleEntityPermission(Base):
     __tablename__ = "role_entity_permissions"
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    role_id: Mapped[int] = mapped_column(ForeignKey('roles.id', ondelete='CASCADE'), nullable=False)
+    role_id: Mapped[int] = mapped_column(
+        ForeignKey("roles.id", ondelete="CASCADE"), nullable=False
+    )
     entity_class_name: Mapped[str] = mapped_column(String(100), nullable=False)
 
-    __table_args__ = (UniqueConstraint('role_id', 'entity_class_name', name='uq_role_entity'),)
+    __table_args__ = (
+        UniqueConstraint("role_id", "entity_class_name", name="uq_role_entity"),
+    )

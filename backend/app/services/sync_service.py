@@ -262,7 +262,7 @@ class SyncService:
                                         properties[p_map.ontology_property] = val
 
                                     # iii. UPSERT GraphEntity
-                                    # 优先使用 source_id 进行查找，如果没定义 ID 映射则退而求其次使用 name
+                                    # 优先使用 source_id 进行查找，如果没定义 ID 映射则退而求其次使用 _display_name (mapped to name col)
                                     lookup_cond = []
                                     if raw_id is not None:
                                         lookup_cond.append(
@@ -270,7 +270,7 @@ class SyncService:
                                         )
                                     else:
                                         lookup_cond.append(
-                                            GraphEntity.name == str(node_name)
+                                            GraphEntity._display_name == str(node_name)
                                         )
 
                                     ent_result = await self.db.execute(
@@ -301,10 +301,14 @@ class SyncService:
                                         ):
                                             del existing_props["id"]
                                         entity.properties = existing_props
+
+                                        # Also update display name if it changed
+                                        entity._display_name = str(node_name)
+
                                         total_updated += 1
                                     else:
                                         new_entity = GraphEntity(
-                                            name=str(node_name),
+                                            _display_name=str(node_name),
                                             entity_type=mapping.ontology_class_name,
                                             source_id=(
                                                 str(raw_id)

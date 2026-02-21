@@ -39,7 +39,8 @@ class GraphEntity(Base):
     __tablename__ = "graph_entities"
 
     id = Column(Integer, primary_key=True, autoincrement="auto")
-    name = Column(String(500), nullable=False, index=True)
+    _display_name = Column("_display_name", String(500), nullable=False, index=True)
+
     entity_type = Column(String(255), nullable=False)  # 对应 Neo4j 的 Label
     is_instance = Column(
         Boolean, default=True, index=True
@@ -67,7 +68,7 @@ class GraphEntity(Base):
     )
 
     __table_args__ = (
-        Index("idx_entities_name", "name"),
+        Index("idx_entities_display_name", "_display_name"),
         Index("idx_entities_type", "entity_type"),
         Index("idx_entities_is_instance", "is_instance"),
         Index("idx_entities_type_instance", "entity_type", "is_instance"),

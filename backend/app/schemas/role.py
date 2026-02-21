@@ -20,7 +20,7 @@ class RoleBase(BaseModel):
 
 
 class RoleCreate(RoleBase):
-    pass
+    role_type: str = "system"  # "system" or "business"
 
 
 class RoleUpdate(BaseModel):
@@ -31,6 +31,7 @@ class RoleUpdate(BaseModel):
 class RoleResponse(RoleBase):
     id: int
     is_system: bool
+    role_type: str = "system"
     created_at: datetime
     updated_at: datetime
 

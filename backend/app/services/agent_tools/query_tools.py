@@ -149,13 +149,18 @@ def create_query_tools(
         """Query neighbor nodes of an instance."""
 
         async def _execute(tools) -> str:
-            results = await tools.get_instance_neighbors(
-                instance_name,
-                hops,
-                direction,
-                entity_type=type,
-                property_filter=property_filter,
-            )
+            kwargs = {
+                "hops": hops,
+                "direction": direction,
+                "entity_type": type,
+                "property_filter": property_filter,
+            }
+            if instance_name.isdigit():
+                kwargs["entity_id"] = int(instance_name)
+            else:
+                kwargs["entity_name"] = instance_name
+
+            results = await tools.get_instance_neighbors(**kwargs)
             if not results:
                 return f"No neighbor nodes found for '{instance_name}'"
 
@@ -204,9 +209,18 @@ def create_query_tools(
         """Find the path between two instances."""
 
         async def _execute(tools) -> str:
-            result = await tools.find_path_between_instances(
-                start_name, end_name, max_depth
-            )
+            kwargs = {"max_depth": max_depth}
+            if start_name.isdigit():
+                kwargs["start_id"] = int(start_name)
+            else:
+                kwargs["start_name"] = start_name
+
+            if end_name.isdigit():
+                kwargs["end_id"] = int(end_name)
+            else:
+                kwargs["end_name"] = end_name
+
+            result = await tools.find_path_between_instances(**kwargs)
             if not result:
                 return f"No path found between '{start_name}' and '{end_name}'"
             nodes = result.get("nodes", [])

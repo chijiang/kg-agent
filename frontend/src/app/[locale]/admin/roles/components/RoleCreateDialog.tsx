@@ -8,11 +8,12 @@ import { Input } from '@/components/ui/input'
 import { toast } from 'sonner'
 
 interface RoleCreateDialogProps {
+    roleType: 'system' | 'business'
     onClose: () => void
     onCreated: () => void
 }
 
-export function RoleCreateDialog({ onClose, onCreated }: RoleCreateDialogProps) {
+export function RoleCreateDialog({ roleType, onClose, onCreated }: RoleCreateDialogProps) {
     const [name, setName] = useState('')
     const [description, setDescription] = useState('')
     const [loading, setLoading] = useState(false)
@@ -22,7 +23,7 @@ export function RoleCreateDialog({ onClose, onCreated }: RoleCreateDialogProps) 
         setLoading(true)
 
         try {
-            await rolesApi.create({ name, description: description || undefined })
+            await rolesApi.create({ name, description: description || undefined, role_type: roleType })
             toast.success('Role created successfully')
             onCreated()
             onClose()
@@ -39,7 +40,7 @@ export function RoleCreateDialog({ onClose, onCreated }: RoleCreateDialogProps) 
         <Dialog open onOpenChange={onClose}>
             <DialogContent>
                 <DialogHeader>
-                    <DialogTitle>Create New Role</DialogTitle>
+                    <DialogTitle>Create New {roleType === 'business' ? 'Business' : 'System'} Role</DialogTitle>
                 </DialogHeader>
                 <form onSubmit={handleSubmit} className="space-y-4">
                     <div>

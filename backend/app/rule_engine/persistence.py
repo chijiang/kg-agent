@@ -33,6 +33,17 @@ class PersistenceService:
             True if successful
         """
         try:
+            # Ensure entity_id is numeric to match graph_entities integer id column.
+            if isinstance(entity_id, str) and entity_id.isdigit():
+                numeric_id = int(entity_id)
+            elif isinstance(entity_id, int):
+                numeric_id = entity_id
+            else:
+                logger.warning(
+                    f"PersistenceService: entity_id {entity_id} is not numeric."
+                )
+                return False
+
             # Use jsonb_set(target, path, new_value)
             # path is an array of text
             update_query = text(
@@ -43,7 +54,7 @@ class PersistenceService:
                     ARRAY[:prop_name]::text[],
                     CAST(:json_value AS jsonb)
                 )
-                WHERE id = :entity_id OR CAST(id AS text) = :entity_id_str
+                WHERE id = :numeric_id
                 AND entity_type = :entity_type
                 """
             )
@@ -53,8 +64,7 @@ class PersistenceService:
             await session.execute(
                 update_query,
                 {
-                    "entity_id": entity_id,
-                    "entity_id_str": str(entity_id),
+                    "numeric_id": numeric_id,
                     "entity_type": entity_type,
                     "prop_name": prop_name,
                     "json_value": json_value,

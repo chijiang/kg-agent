@@ -5,7 +5,13 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 from typing import List
 from app.core.database import get_db
-from app.models.role import Role, UserRole, RolePagePermission, RoleActionPermission, RoleEntityPermission
+from app.models.role import (
+    Role,
+    UserRole,
+    RolePagePermission,
+    RoleActionPermission,
+    RoleEntityPermission,
+)
 from app.models.user import User
 from app.schemas.role import (
     RoleCreate,
@@ -24,11 +30,17 @@ router = APIRouter(prefix="/api/roles", tags=["roles"])
 
 @router.get("", response_model=List[RoleResponse])
 async def list_roles(
+    role_type: str = Query(
+        None, description="Filter by role type: 'system' or 'business'"
+    ),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    """获取所有角色"""
-    result = await db.execute(select(Role))
+    """获取所有角色，可按类型筛选"""
+    query = select(Role)
+    if role_type:
+        query = query.where(Role.role_type == role_type)
+    result = await db.execute(query)
     roles = result.scalars().all()
 
     return [RoleResponse.model_validate(r) for r in roles]
@@ -64,7 +76,9 @@ async def get_role(
 
     # 获取实体权限
     entity_result = await db.execute(
-        select(RoleEntityPermission.entity_class_name).where(RoleEntityPermission.role_id == role_id)
+        select(RoleEntityPermission.entity_class_name).where(
+            RoleEntityPermission.role_id == role_id
+        )
     )
     entity_permissions = [row[0] for row in entity_result.all()]
 
@@ -73,6 +87,7 @@ async def get_role(
         name=role.name,
         description=role.description,
         is_system=role.is_system,
+        role_type=role.role_type,
         created_at=role.created_at,
         updated_at=role.updated_at,
         page_permissions=page_permissions,
@@ -96,7 +111,8 @@ async def create_role(
     role = Role(
         name=role_data.name,
         description=role_data.description,
-        is_system=False
+        is_system=False,
+        role_type=role_data.role_type,
     )
     db.add(role)
     await db.commit()
@@ -126,10 +142,7 @@ async def update_role(
     if role_data.name is not None:
         # 检查名称是否重复
         existing = await db.execute(
-            select(Role).where(
-                Role.name == role_data.name,
-                Role.id != role_id
-            )
+            select(Role).where(Role.name == role_data.name, Role.id != role_id)
         )
         if existing.scalar_one_or_none():
             raise HTTPException(status_code=400, detail="Role name already exists")
@@ -167,7 +180,9 @@ async def delete_role(
         )
     )
     if user_count.scalar() > 0:
-        raise HTTPException(status_code=400, detail="Cannot delete role with assigned users")
+        raise HTTPException(
+            status_code=400, detail="Cannot delete role with assigned users"
+        )
 
     await db.delete(role)
     await db.commit()
@@ -176,6 +191,7 @@ async def delete_role(
 
 
 # ==================== 权限管理 ====================
+
 
 @router.get("/{role_id}/permissions/pages", response_model=List[str])
 async def get_page_permissions(
@@ -207,7 +223,7 @@ async def add_page_permission(
     existing = await db.execute(
         select(RolePagePermission).where(
             RolePagePermission.role_id == role_id,
-            RolePagePermission.page_id == perm.page_id
+            RolePagePermission.page_id == perm.page_id,
         )
     )
     if existing.scalar_one_or_none():
@@ -230,8 +246,7 @@ async def remove_page_permission(
     """删除页面权限（admin only）"""
     result = await db.execute(
         select(RolePagePermission).where(
-            RolePagePermission.role_id == role_id,
-            RolePagePermission.page_id == page_id
+            RolePagePermission.role_id == role_id, RolePagePermission.page_id == page_id
         )
     )
     permission = result.scalar_one_or_none()
@@ -281,16 +296,14 @@ async def add_action_permission(
         select(RoleActionPermission).where(
             RoleActionPermission.role_id == role_id,
             RoleActionPermission.entity_type == perm.entity_type,
-            RoleActionPermission.action_name == perm.action_name
+            RoleActionPermission.action_name == perm.action_name,
         )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Permission already exists")
 
     permission = RoleActionPermission(
-        role_id=role_id,
-        entity_type=perm.entity_type,
-        action_name=perm.action_name
+        role_id=role_id, entity_type=perm.entity_type, action_name=perm.action_name
     )
     db.add(permission)
     await db.commit()
@@ -311,7 +324,7 @@ async def remove_action_permission(
         select(RoleActionPermission).where(
             RoleActionPermission.role_id == role_id,
             RoleActionPermission.entity_type == entity_type,
-            RoleActionPermission.action_name == action_name
+            RoleActionPermission.action_name == action_name,
         )
     )
     permission = result.scalar_one_or_none()
@@ -333,7 +346,9 @@ async def get_entity_permissions(
 ):
     """获取角色的实体类型权限"""
     result = await db.execute(
-        select(RoleEntityPermission.entity_class_name).where(RoleEntityPermission.role_id == role_id)
+        select(RoleEntityPermission.entity_class_name).where(
+            RoleEntityPermission.role_id == role_id
+        )
     )
     return [row[0] for row in result.all()]
 
@@ -355,15 +370,14 @@ async def add_entity_permission(
     existing = await db.execute(
         select(RoleEntityPermission).where(
             RoleEntityPermission.role_id == role_id,
-            RoleEntityPermission.entity_class_name == perm.entity_class_name
+            RoleEntityPermission.entity_class_name == perm.entity_class_name,
         )
     )
     if existing.scalar_one_or_none():
         raise HTTPException(status_code=400, detail="Permission already exists")
 
     permission = RoleEntityPermission(
-        role_id=role_id,
-        entity_class_name=perm.entity_class_name
+        role_id=role_id, entity_class_name=perm.entity_class_name
     )
     db.add(permission)
     await db.commit()
@@ -382,7 +396,7 @@ async def remove_entity_permission(
     result = await db.execute(
         select(RoleEntityPermission).where(
             RoleEntityPermission.role_id == role_id,
-            RoleEntityPermission.entity_class_name == entity_class_name
+            RoleEntityPermission.entity_class_name == entity_class_name,
         )
     )
     permission = result.scalar_one_or_none()

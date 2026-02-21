@@ -78,7 +78,9 @@
     "instances": "实例图谱",
     "dataProducts": "数据产品",
     "rules": "业务规则",
-    "config": "系统配置"
+    "config": "系统配置",
+    "users": "用户管理",
+    "roles": "角色管理"
   },
   "layout": {
     "title": "企业本体管理平台",

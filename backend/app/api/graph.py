@@ -93,7 +93,7 @@ async def get_node(
     if entity:
         return {
             "id": entity.id,
-            "name": entity.name,
+            "name": entity._display_name,  # Map _display_name to compat "name" field
             "entity_type": entity.entity_type,
             "properties": entity.properties or {},
         }
@@ -111,7 +111,16 @@ async def get_neighbors(
 ):
     """获取节点邻居"""
     storage = PGGraphStorage(db)
-    neighbors = await storage.get_instance_neighbors(name, hops, direction)
+
+    if name.isdigit():
+        neighbors = await storage.get_instance_neighbors(
+            entity_id=int(name), hops=hops, direction=direction
+        )
+    else:
+        neighbors = await storage.get_instance_neighbors(
+            entity_name=name, hops=hops, direction=direction
+        )
+
     return neighbors
 
 
@@ -125,7 +134,19 @@ async def find_path(
 ):
     """查找路径"""
     storage = PGGraphStorage(db)
-    path = await storage.find_path_between_instances(start_uri, end_uri, max_depth)
+
+    kwargs = {"max_depth": max_depth}
+    if start_uri.isdigit():
+        kwargs["start_id"] = int(start_uri)
+    else:
+        kwargs["start_name"] = start_uri
+
+    if end_uri.isdigit():
+        kwargs["end_id"] = int(end_uri)
+    else:
+        kwargs["end_name"] = end_uri
+
+    path = await storage.find_path_between_instances(**kwargs)
     if not path:
         raise HTTPException(status_code=404, detail="Path not found")
     return path
@@ -162,7 +183,9 @@ async def get_schema(
 ):
     """获取 Schema 图（类和关系定义）"""
     # 获取用户可访问的实体类型
-    accessible_entities = await PermissionService.get_accessible_entities(db, current_user)
+    accessible_entities = await PermissionService.get_accessible_entities(
+        db, current_user
+    )
 
     # Admin用户拥有所有权限，传None不过滤
     entity_types = None if current_user.is_admin else accessible_entities
@@ -173,7 +196,7 @@ async def get_schema(
     nodes_data = await storage.get_ontology_classes(entity_types)
 
     # 获取所有 Schema 关系
-    rels_data = await storage.get_ontology_relationships()
+    rels_data = await storage.get_ontology_relationships(entity_types)
 
     return {
         "nodes": nodes_data,
@@ -227,7 +250,9 @@ async def get_classes(
 ):
     """获取所有类定义"""
     # 获取用户可访问的实体类型
-    accessible_entities = await PermissionService.get_accessible_entities(db, current_user)
+    accessible_entities = await PermissionService.get_accessible_entities(
+        db, current_user
+    )
 
     # Admin用户拥有所有权限，传None不过滤
     entity_types = None if current_user.is_admin else accessible_entities
@@ -243,8 +268,14 @@ async def get_schema_relationships(
     db: AsyncSession = Depends(get_db),
 ):
     """获取 Schema 关系定义"""
+    # 获取用户可访问的实体类型
+    accessible_entities = await PermissionService.get_accessible_entities(
+        db, current_user
+    )
+    entity_types = None if current_user.is_admin else accessible_entities
+
     storage = PGGraphStorage(db)
-    relationships = await storage.get_ontology_relationships()
+    relationships = await storage.get_ontology_relationships(entity_types)
     return relationships
 
 
@@ -255,8 +286,14 @@ async def describe_class(
     db: AsyncSession = Depends(get_db),
 ):
     """描述一个类的定义"""
+    # 获取用户可访问的实体类型
+    accessible_entities = await PermissionService.get_accessible_entities(
+        db, current_user
+    )
+    entity_types = None if current_user.is_admin else accessible_entities
+
     storage = PGGraphStorage(db)
-    result = await storage.describe_class(class_name)
+    result = await storage.describe_class(class_name, entity_types)
 
     if "error" in result:
         raise HTTPException(status_code=404, detail=result["error"])
@@ -373,7 +410,9 @@ async def get_random_instances(
 ):
     """获取随机实例图谱作为初始展示"""
     # 获取用户可访问的实体类型
-    accessible_entities = await PermissionService.get_accessible_entities(db, current_user)
+    accessible_entities = await PermissionService.get_accessible_entities(
+        db, current_user
+    )
 
     # Admin用户拥有所有权限，传None不过滤
     entity_types = None if current_user.is_admin else accessible_entities
