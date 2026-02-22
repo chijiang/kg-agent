@@ -657,6 +657,7 @@ class PGGraphStorage:
         direction: str = "both",
         entity_type: Optional[str] = None,
         property_filter: Optional[Dict[str, Any]] = None,
+        accessible_entity_types: Optional[List[str]] = None,
     ) -> List[Dict]:
         """查询实例节点的邻居
 
@@ -675,32 +676,35 @@ class PGGraphStorage:
 
         # 由于参数化 CTE 比较复杂，这里使用简化的实现
         # 对于 1 跳查询，直接使用 JOIN
-        if hops == 1:
-            return await self._get_one_hop_neighbors(
+        if hops <= 1:
+            return await self._get_1hop_neighbors(
                 direction,
                 entity_type,
                 property_filter,
-                entity_id=entity_id,
-                entity_name=entity_name,
+                entity_id,
+                entity_name,
+                accessible_entity_types,
+            )
+        else:
+            # 对于多跳查询，使用构建的方式
+            return await self._get_multi_hop_neighbors(
+                hops,
+                direction,
+                entity_type,
+                property_filter,
+                entity_id,
+                entity_name,
+                accessible_entity_types,
             )
 
-        # 对于多跳查询，使用构建的方式
-        return await self._get_multi_hop_neighbors(
-            hops,
-            direction,
-            entity_type,
-            property_filter,
-            entity_id=entity_id,
-            entity_name=entity_name,
-        )
-
-    async def _get_one_hop_neighbors(
+    async def _get_1hop_neighbors(
         self,
         direction: str,
         entity_type: Optional[str] = None,
         property_filter: Optional[Dict[str, Any]] = None,
         entity_id: Optional[int] = None,
         entity_name: Optional[str] = None,
+        accessible_entity_types: Optional[List[str]] = None,
     ) -> List[Dict]:
         """获取 1 跳邻居（简化实现）"""
         # 先获取起始节点
@@ -749,6 +753,11 @@ class PGGraphStorage:
                         GraphEntity.properties[key].astext == str(value)
                     )
 
+            if accessible_entity_types is not None and accessible_entity_types:
+                query = query.where(
+                    GraphEntity.entity_type.in_(accessible_entity_types)
+                )
+
         elif direction == "incoming":
             query = (
                 select(GraphRelationship, GraphEntity)
@@ -764,6 +773,11 @@ class PGGraphStorage:
                     query = query.where(
                         GraphEntity.properties[key].astext == str(value)
                     )
+
+            if accessible_entity_types is not None and accessible_entity_types:
+                query = query.where(
+                    GraphEntity.entity_type.in_(accessible_entity_types)
+                )
 
         else:  # both
             # 查询所有关联的关系和实体
@@ -827,6 +841,11 @@ class PGGraphStorage:
                     query = query.where(
                         GraphEntity.properties[key].astext == str(value)
                     )
+
+            if accessible_entity_types is not None and accessible_entity_types:
+                query = query.where(
+                    GraphEntity.entity_type.in_(accessible_entity_types)
+                )
 
             entities_result = await self.db.execute(query)
             entities = {e.id: e for e in entities_result.scalars().all()}
@@ -915,13 +934,14 @@ class PGGraphStorage:
         property_filter: Optional[Dict[str, Any]] = None,
         entity_id: Optional[int] = None,
         entity_name: Optional[str] = None,
+        accessible_entity_types: Optional[List[str]] = None,
     ) -> List[Dict]:
         """获取多跳邻居（使用 SQL 原生查询）"""
-        if instance_name.isdigit():
+        if entity_name and entity_name.isdigit():
             # Try by ID first
             result = await self.db.execute(
                 select(GraphEntity).where(
-                    GraphEntity.id == int(instance_name),
+                    GraphEntity.id == int(entity_name),
                     GraphEntity.is_instance == True,
                 )
             )
@@ -929,11 +949,20 @@ class PGGraphStorage:
         else:
             start_entity = None
 
-        if not start_entity:
+        if not start_entity and entity_id is not None:
+            result = await self.db.execute(
+                select(GraphEntity).where(
+                    GraphEntity.id == entity_id,
+                    GraphEntity.is_instance == True,
+                )
+            )
+            start_entity = result.scalar_one_or_none()
+
+        if not start_entity and entity_name is not None:
             # Try by display name
             result = await self.db.execute(
                 select(GraphEntity).where(
-                    GraphEntity._display_name == instance_name,
+                    GraphEntity._display_name == entity_name,
                     GraphEntity.is_instance == True,
                 )
             )
@@ -1008,6 +1037,7 @@ class PGGraphStorage:
             JOIN graph_entities t ON r.target_id = t.id
             WHERE ns.depth <= :hops
             AND NOT (CASE WHEN r.source_id = ns.id THEN r.target_id ELSE r.source_id END = ANY(ns.path_ids))
+            {f"AND (CASE WHEN r.source_id = ns.id THEN t.entity_type ELSE s.entity_type END) = ANY(:accessible_entity_types)" if accessible_entity_types else ""}
         )
         SELECT id, name, entity_type, properties, rel_type, source_name, depth
         FROM neighbor_search
@@ -1017,6 +1047,9 @@ class PGGraphStorage:
         )
 
         params = {"start_id": start_id, "hops": hops, **filter_params}
+        if accessible_entity_types:
+            params["accessible_entity_types"] = accessible_entity_types
+
         result = await self.db.execute(sql_query, params)
         rows = result.fetchall()
 
@@ -1099,6 +1132,7 @@ class PGGraphStorage:
         end_id: Optional[int] = None,
         end_name: Optional[str] = None,
         max_depth: int = 5,
+        accessible_entity_types: Optional[List[str]] = None,
     ) -> Optional[Dict]:
         """查找两个实例之间的最短路径
 
@@ -1204,6 +1238,7 @@ class PGGraphStorage:
             JOIN graph_entities t ON r.target_id = t.id
             WHERE sp.depth < :max_depth
             AND NOT (CASE WHEN r.source_id = sp.current_id THEN r.target_id ELSE r.source_id END = ANY(sp.path_ids))
+            {f"AND (CASE WHEN r.source_id = sp.current_id THEN t.entity_type ELSE s.entity_type END) = ANY(:accessible_entity_types)" if accessible_entity_types else ""}
         )
         SELECT path_names, path_labels, rel_types, path_ids
         FROM shortest_path
@@ -1213,10 +1248,11 @@ class PGGraphStorage:
         """
         )
 
-        result = await self.db.execute(
-            path_query,
-            {"start_id": start[0], "end_id": end[0], "max_depth": max_depth},
-        )
+        params = {"start_id": start[0], "end_id": end[0], "max_depth": max_depth}
+        if accessible_entity_types:
+            params["accessible_entity_types"] = accessible_entity_types
+
+        result = await self.db.execute(path_query, params)
         row = result.first()
 
         if not row:
@@ -1421,34 +1457,97 @@ class PGGraphStorage:
         self, limit: int = 100, accessible_entity_types: List[str] = None
     ) -> Dict[str, List[Dict]]:
         """获取随机的实例图谱片段（节点 + 关系）"""
-        # 1. 随机获取一些节点
-        query = select(GraphEntity).where(GraphEntity.is_instance == True)
+        from sqlalchemy.orm import aliased
 
-        # 添加实体类型过滤
+        SourceEntity = aliased(GraphEntity)
+        TargetEntity = aliased(GraphEntity)
+
+        # 1. 优先获取随机关系，让返回的图谱连通性更好
+        rel_limit = max(10, limit // 2)
+        rel_query = (
+            select(GraphRelationship)
+            .join(SourceEntity, SourceEntity.id == GraphRelationship.source_id)
+            .join(TargetEntity, TargetEntity.id == GraphRelationship.target_id)
+            .where(SourceEntity.is_instance == True, TargetEntity.is_instance == True)
+        )
+
         if accessible_entity_types is not None and accessible_entity_types:
-            query = query.where(GraphEntity.entity_type.in_(accessible_entity_types))
+            rel_query = rel_query.where(
+                and_(
+                    SourceEntity.entity_type.in_(accessible_entity_types),
+                    TargetEntity.entity_type.in_(accessible_entity_types),
+                )
+            )
 
-        query = query.order_by(func.random()).limit(limit)
-        result = await self.db.execute(query)
-        entities = result.scalars().all()
+        rel_query = rel_query.order_by(func.random()).limit(rel_limit)
+        rel_result = await self.db.execute(rel_query)
+        sampled_rels = rel_result.scalars().all()
 
-        if not entities:
+        entity_ids = set()
+        for r in sampled_rels:
+            entity_ids.add(r.source_id)
+            entity_ids.add(r.target_id)
+
+        # 2. 如果节点数量不足，补充获取一些节点
+        remaining_limit = limit - len(entity_ids)
+        if remaining_limit > 0:
+            query = select(GraphEntity.id).where(GraphEntity.is_instance == True)
+
+            # 添加实体类型过滤
+            if accessible_entity_types is not None and accessible_entity_types:
+                query = query.where(
+                    GraphEntity.entity_type.in_(accessible_entity_types)
+                )
+
+            if entity_ids:
+                query = query.where(~GraphEntity.id.in_(list(entity_ids)))
+
+            query = query.order_by(func.random()).limit(remaining_limit)
+            result = await self.db.execute(query)
+            for row in result.all():
+                entity_ids.add(row[0])
+
+        if not entity_ids:
             return {"nodes": [], "relationships": []}
 
-        entity_ids = [e.id for e in entities]
-        entity_map = {e.id: e for e in entities}
+        # 3. 获取这些节点的完整信息
+        entity_query = select(GraphEntity).where(GraphEntity.id.in_(list(entity_ids)))
+        if accessible_entity_types is not None and accessible_entity_types:
+            entity_query = entity_query.where(
+                GraphEntity.entity_type.in_(accessible_entity_types)
+            )
 
-        # 2. 获取这些节点之间的关系
-        rel_query = select(GraphRelationship).where(
-            and_(
-                GraphRelationship.source_id.in_(entity_ids),
-                GraphRelationship.target_id.in_(entity_ids),
+        entity_result = await self.db.execute(entity_query)
+        entities = entity_result.scalars().all()
+
+        # update the entity_ids to only include those that passed the filter
+        entity_ids = set([e.id for e in entities])
+
+        # 4. 获取这些最终确定的节点之间的所有关系
+        final_rel_query = (
+            select(GraphRelationship)
+            .join(SourceEntity, SourceEntity.id == GraphRelationship.source_id)
+            .join(TargetEntity, TargetEntity.id == GraphRelationship.target_id)
+            .where(
+                and_(
+                    GraphRelationship.source_id.in_(list(entity_ids)),
+                    GraphRelationship.target_id.in_(list(entity_ids)),
+                )
             )
         )
-        rel_result = await self.db.execute(rel_query)
-        relationships = rel_result.scalars().all()
 
-        # 3. 组装结果
+        if accessible_entity_types is not None and accessible_entity_types:
+            final_rel_query = final_rel_query.where(
+                and_(
+                    SourceEntity.entity_type.in_(accessible_entity_types),
+                    TargetEntity.entity_type.in_(accessible_entity_types),
+                )
+            )
+
+        final_rel_result = await self.db.execute(final_rel_query)
+        relationships = final_rel_result.scalars().all()
+
+        # 5. 组装结果
         nodes_data = [
             {
                 "id": e.id,

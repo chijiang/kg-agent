@@ -377,16 +377,32 @@ class SyncService:
         """根据外键同步实体间的关系"""
         stats = {"created": 0, "failed": 0}
 
-        # 加载所有涉及到该数据产品的关系映射
+        # 加载所有涉及到该数据产品的关系映射 (无论该产品是源还是目标)
         mappings_ids = [m.id for m in product.entity_mappings]
         if not mappings_ids:
             return stats
 
+        from sqlalchemy import or_
+        from app.models.data_product import EntityMapping
+
         result = await self.db.execute(
             select(RelationshipMapping)
-            .options(selectinload(RelationshipMapping.source_entity_mapping))
-            .options(selectinload(RelationshipMapping.target_entity_mapping))
-            .where(RelationshipMapping.source_entity_mapping_id.in_(mappings_ids))
+            .options(
+                selectinload(RelationshipMapping.source_entity_mapping).selectinload(
+                    EntityMapping.data_product
+                )
+            )
+            .options(
+                selectinload(RelationshipMapping.target_entity_mapping).selectinload(
+                    EntityMapping.data_product
+                )
+            )
+            .where(
+                or_(
+                    RelationshipMapping.source_entity_mapping_id.in_(mappings_ids),
+                    RelationshipMapping.target_entity_mapping_id.in_(mappings_ids),
+                )
+            )
         )
         rel_mappings = result.scalars().all()
 
@@ -395,132 +411,150 @@ class SyncService:
                 continue
 
             # 为了获取外键信息，我们需要再次拉取源数据
-            # 优化点：可以在第一遍扫描时缓存外键数据，这里为了逻辑简单先单独拉取
+            # 如果当前产品跨越了不同的数据产品，必须使用源产品的 host/port
             source_mapping = rm.source_entity_mapping
             target_mapping = rm.target_entity_mapping
+            source_product = source_mapping.data_product
 
             total_pages = 1
             current_page = 1
             page_size = 100
 
-            while current_page <= total_pages:
-                try:
-                    request_payload = {
-                        "pagination": {
-                            "page": current_page,
-                            "page_size": page_size,
+            # 决定使用哪个客户端：如果源产品就是当前产品，可以直接用 client；否则需要新建 client
+            if source_product.id == product.id:
+                src_client = client
+                is_own_client = True
+            else:
+                src_client = DynamicGrpcClient(
+                    source_product.grpc_host, source_product.grpc_port
+                )
+                await src_client.connect()
+                is_own_client = False
+
+            try:
+                while current_page <= total_pages:
+                    try:
+                        request_payload = {
+                            "pagination": {
+                                "page": current_page,
+                                "page_size": page_size,
+                            }
                         }
-                    }
-                    response = await client.call_method(
-                        product.service_name,
-                        source_mapping.list_method,
-                        request_payload,
-                    )
-
-                    items = []
-                    if isinstance(response, dict):
-                        if "items" in response and isinstance(response["items"], list):
-                            items = response["items"]
-                        else:
-                            for val in response.values():
-                                if isinstance(val, list):
-                                    items = val
-                                    break
-
-                        if "pagination" in response and isinstance(
-                            response["pagination"], dict
-                        ):
-                            total_pages = response["pagination"].get(
-                                "total_pages", total_pages
-                            )
-
-                    elif isinstance(response, list):
-                        items = response
-                        total_pages = 0
-
-                    if not items:
-                        break
-
-                    for item in items:
-                        fk_val = item.get(rm.source_fk_field)
-                        source_raw_id = item.get(source_mapping.id_field_mapping)
-
-                        if fk_val is None or source_raw_id is None:
-                            continue
-
-                        # 查找源节点 ID
-                        # 查找最稳妥的方式是根据 source_id 列。
-
-                        source_ent_res = await self.db.execute(
-                            select(GraphEntity.id).where(
-                                and_(
-                                    GraphEntity.entity_type
-                                    == source_mapping.ontology_class_name,
-                                    GraphEntity.source_id == str(source_raw_id),
-                                )
-                            )
+                        response = await src_client.call_method(
+                            source_product.service_name,
+                            source_mapping.list_method,
+                            request_payload,
                         )
-                        source_id = source_ent_res.scalars().first()
 
-                        # 查找目标节点 ID
-                        target_ent_res = await self.db.execute(
-                            select(GraphEntity.id).where(
-                                and_(
-                                    GraphEntity.entity_type
-                                    == target_mapping.ontology_class_name,
-                                    GraphEntity.source_id == str(fk_val),
+                        items = []
+                        if isinstance(response, dict):
+                            if "items" in response and isinstance(
+                                response["items"], list
+                            ):
+                                items = response["items"]
+                            else:
+                                for val in response.values():
+                                    if isinstance(val, list):
+                                        items = val
+                                        break
+
+                            if "pagination" in response and isinstance(
+                                response["pagination"], dict
+                            ):
+                                total_pages = response["pagination"].get(
+                                    "total_pages", total_pages
                                 )
-                            )
-                        )
-                        target_id = target_ent_res.scalars().first()
 
-                        if source_id and target_id:
-                            # 插入或更新关系
-                            rel_check = await self.db.execute(
-                                select(GraphRelationship).where(
+                        elif isinstance(response, list):
+                            items = response
+                            total_pages = 0
+
+                        if not items:
+                            break
+
+                        for item in items:
+                            fk_val = item.get(rm.source_fk_field)
+                            source_raw_id = item.get(source_mapping.id_field_mapping)
+
+                            if fk_val is None or source_raw_id is None:
+                                continue
+
+                            # 查找源节点 ID
+                            # 查找最稳妥的方式是根据 source_id 列。
+
+                            source_ent_res = await self.db.execute(
+                                select(GraphEntity.id).where(
                                     and_(
-                                        GraphRelationship.source_id == source_id,
-                                        GraphRelationship.target_id == target_id,
-                                        GraphRelationship.relationship_type
-                                        == rm.ontology_relationship,
+                                        GraphEntity.entity_type
+                                        == source_mapping.ontology_class_name,
+                                        GraphEntity.source_id == str(source_raw_id),
                                     )
                                 )
                             )
-                            if not rel_check.scalar_one_or_none():
-                                new_rel = GraphRelationship(
-                                    source_id=source_id,
-                                    target_id=target_id,
-                                    relationship_type=rm.ontology_relationship,
-                                )
-                                self.db.add(new_rel)
-                                stats["created"] += 1
-                        else:
-                            # Debug logging for missing entities
-                            if not source_id:
-                                logger.warning(
-                                    f"Source entity not found for relationship {rm.ontology_relationship}: "
-                                    f"class={source_mapping.ontology_class_name}, "
-                                    f"id_field={source_mapping.id_field_mapping}, "
-                                    f"raw_id={source_raw_id}"
-                                )
-                            if not target_id:
-                                logger.warning(
-                                    f"Target entity not found for relationship {rm.ontology_relationship}: "
-                                    f"class={target_mapping.ontology_class_name}, "
-                                    f"target_id_field={rm.target_id_field}, "
-                                    f"fk_val={fk_val}"
-                                )
+                            source_id = source_ent_res.scalars().first()
 
-                    await self.db.commit()
-                    current_page += 1
+                            # 查找目标节点 ID
+                            target_ent_res = await self.db.execute(
+                                select(GraphEntity.id).where(
+                                    and_(
+                                        GraphEntity.entity_type
+                                        == target_mapping.ontology_class_name,
+                                        GraphEntity.source_id == str(fk_val),
+                                    )
+                                )
+                            )
+                            target_id = target_ent_res.scalars().first()
 
-                except Exception as e:
-                    logger.error(
-                        f"Error syncing relationship {rm.ontology_relationship} page {current_page}: {e}"
-                    )
-                    stats["failed"] += 1
+                            if source_id and target_id:
+                                # 插入或更新关系
+                                rel_check = await self.db.execute(
+                                    select(GraphRelationship).where(
+                                        and_(
+                                            GraphRelationship.source_id == source_id,
+                                            GraphRelationship.target_id == target_id,
+                                            GraphRelationship.relationship_type
+                                            == rm.ontology_relationship,
+                                        )
+                                    )
+                                )
+                                if not rel_check.scalar_one_or_none():
+                                    new_rel = GraphRelationship(
+                                        source_id=source_id,
+                                        target_id=target_id,
+                                        relationship_type=rm.ontology_relationship,
+                                    )
+                                    self.db.add(new_rel)
+                                    stats["created"] += 1
+                            else:
+                                # Debug logging for missing entities
+                                if not source_id:
+                                    logger.warning(
+                                        f"Source entity not found for relationship {rm.ontology_relationship}: "
+                                        f"class={source_mapping.ontology_class_name}, "
+                                        f"id_field={source_mapping.id_field_mapping}, "
+                                        f"raw_id={source_raw_id}"
+                                    )
+                                if not target_id:
+                                    logger.warning(
+                                        f"Target entity not found for relationship {rm.ontology_relationship}: "
+                                        f"class={target_mapping.ontology_class_name}, "
+                                        f"target_id_field={rm.target_id_field}, "
+                                        f"fk_val={fk_val}"
+                                    )
+
+                        await self.db.commit()
+                        current_page += 1
+
+                    except Exception as e:
+                        logger.error(
+                            f"Error syncing relationship {rm.ontology_relationship} page {current_page}: {e}"
+                        )
+                        stats["failed"] += 1
                     # Choose whether to break or continue; breaking avoids infinite loops on error
                     break
+            finally:
+                if not is_own_client:
+                    await src_client.close()
 
         return stats
 
