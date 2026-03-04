@@ -1396,8 +1396,9 @@ class PGGraphStorage:
         if entity_type:
             query = query.where(GraphEntity.entity_type == entity_type)
 
+        query = query.limit(1)
         result = await self.db.execute(query)
-        entity = result.scalar_one_or_none()
+        entity = result.scalars().first()
 
         if not entity:
             return None

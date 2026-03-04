@@ -53,6 +53,7 @@ async def import_graph(
     """导入 OWL/TTL 文件到 PostgreSQL 图存储"""
     # Validate file extension
     import os
+
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(
@@ -135,8 +136,10 @@ async def get_node(
     # 3. 尝试按 URI 查找
     from app.models.graph import GraphEntity
 
-    result = await db.execute(select(GraphEntity).where(GraphEntity.uri == uri))
-    entity = result.scalar_one_or_none()
+    result = await db.execute(
+        select(GraphEntity).where(GraphEntity.uri == uri).limit(1)
+    )
+    entity = result.scalars().first()
     if entity:
         return {
             "id": entity.id,
