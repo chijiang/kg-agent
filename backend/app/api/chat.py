@@ -125,7 +125,7 @@ async def chat_stream_v2(
                     content=full_content,
                 )
                 db.add(assistant_message)
-                conversation.updated_at = datetime.now(timezone.utc)
+                conversation.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
                 await db.commit()
             except Exception:
                 logger.exception("Failed to save assistant message")
@@ -174,7 +174,7 @@ async def chat_stream_v2(
                 ),
             )
             db.add(assistant_message)
-            conversation.updated_at = datetime.now(timezone.utc)
+            conversation.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
         except Exception:
             logger.exception("Failed to save assistant message")

@@ -28,10 +28,10 @@ class Role(Base):
         String(20), default="system", nullable=False
     )  # "system" or "business"
     created_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
     )
     updated_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
     )
 
 
@@ -54,7 +54,7 @@ class UserRole(Base):
         ForeignKey("users.id"), nullable=True
     )
     assigned_at: Mapped[datetime] = mapped_column(
-        DateTime, default=lambda: datetime.now(timezone.utc), nullable=False
+        DateTime, default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), nullable=False
     )
 
     __table_args__ = (UniqueConstraint("user_id", "role_id", name="uq_user_role"),)

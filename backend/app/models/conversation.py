@@ -11,9 +11,9 @@ class Conversation(Base):
     id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
     user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False, index=True)
     title: Mapped[str] = mapped_column(String(255), default="新对话")
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
     updated_at: Mapped[datetime] = mapped_column(
-        default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc)
+        default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None)
     )
 
     messages: Mapped[list["Message"]] = relationship(
@@ -38,7 +38,7 @@ class Message(Base):
     extra_metadata: Mapped[dict | None] = mapped_column(
         JSON, nullable=True
     )  # For graph_data, thinking, etc.
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     conversation: Mapped["Conversation"] = relationship(
         "Conversation", back_populates="messages"

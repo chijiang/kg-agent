@@ -154,7 +154,7 @@ async def add_message(
     db.add(message)
 
     # 更新对话时间
-    conversation.updated_at = datetime.now(timezone.utc)
+    conversation.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
 
     await db.commit()
     await db.refresh(message)

@@ -227,7 +227,7 @@ async def test_connection(
                 product.connection_status = ConnectionStatus.DISCONNECTED
                 product.last_error = message
 
-            product.last_health_check = datetime.now(timezone.utc)
+            product.last_health_check = datetime.now(timezone.utc).replace(tzinfo=None)
             await db.commit()
 
             if not success:
@@ -245,7 +245,7 @@ async def test_connection(
         logger.error(f"Error testing connection for product {product_id}: {e}")
         product.connection_status = ConnectionStatus.DISCONNECTED
         product.last_error = str(e)
-        product.last_health_check = datetime.now(timezone.utc)
+        product.last_health_check = datetime.now(timezone.utc).replace(tzinfo=None)
         await db.commit()
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,

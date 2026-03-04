@@ -20,8 +20,8 @@ class User(Base):
     approved_by: Mapped[int | None] = mapped_column(Integer, nullable=True)  # Foreign key to User.id
     approved_at: Mapped[datetime | None] = mapped_column(nullable=True)
     is_password_changed: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc))
-    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+    created_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
+    updated_at: Mapped[datetime] = mapped_column(default=lambda: datetime.now(timezone.utc).replace(tzinfo=None), onupdate=lambda: datetime.now(timezone.utc).replace(tzinfo=None))
 
     def __init__(self, **kwargs):
         if 'is_active' not in kwargs:

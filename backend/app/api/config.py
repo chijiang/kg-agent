@@ -48,7 +48,7 @@ async def update_llm_config(
             config.api_key_encrypted = encrypt_data(req.api_key)
         config.base_url = req.base_url
         config.model = req.model
-        config.updated_at = datetime.now(timezone.utc)
+        config.updated_at = datetime.now(timezone.utc).replace(tzinfo=None)
     else:
         if req.api_key == "************":
             raise HTTPException(status_code=400, detail="Cannot use placeholder for new configuration")
