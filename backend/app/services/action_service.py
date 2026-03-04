@@ -388,6 +388,7 @@ async def execute_single_action(
             "success": result.success,
             "error": result.error,
             "changes": result.changes,
+            "return_value": result.return_value,
         }
     except Exception as e:
         return {"success": False, "error": str(e)}

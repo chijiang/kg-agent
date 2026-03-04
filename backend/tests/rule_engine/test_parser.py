@@ -128,3 +128,29 @@ def test_parse_call_with_quoted_service():
     call = action.effect.statements[0]
     assert call.service_name == "ERP Orders"
     assert call.method_name == "UpdateOrder"
+
+
+def test_parse_action_with_return():
+    """Test parsing an ACTION with a RETURN statement."""
+    dsl_text = """
+    ACTION PurchaseOrder.getData {
+        PRECONDITION: true ON_FAILURE: "Error"
+        EFFECT {
+            CALL ERP.GetData({id: this.id}) INTO my_data;
+            RETURN my_data;
+        }
+    }
+    """
+    parser = RuleParser()
+    result = parser.parse(dsl_text)
+
+    assert len(result) == 1
+    action = result[0]
+    assert action.effect is not None
+    statements = action.effect.statements
+    assert len(statements) == 2
+    assert statements[0].__class__.__name__ == "CallStatement"
+
+    ret_stmt = statements[1]
+    assert ret_stmt.__class__.__name__ == "ReturnStatement"
+    assert ret_stmt.value == ("id", "my_data")

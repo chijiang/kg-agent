@@ -3,7 +3,13 @@
 from dataclasses import dataclass, field
 from typing import Any
 from app.rule_engine.action_registry import ActionRegistry
-from app.rule_engine.models import ActionDef, SetStatement, CallStatement, UpdateEvent
+from app.rule_engine.models import (
+    ActionDef,
+    SetStatement,
+    CallStatement,
+    ReturnStatement,
+    UpdateEvent,
+)
 from app.rule_engine.context import EvaluationContext
 from app.rule_engine.evaluator import ExpressionEvaluator
 from app.rule_engine.event_emitter import GraphEventEmitter
@@ -23,6 +29,7 @@ class ExecutionResult:
     success: bool
     error: str | None = None
     changes: dict[str, Any] = field(default_factory=dict)
+    return_value: Any | None = None
 
 
 class ActionExecutor:
@@ -102,8 +109,11 @@ class ActionExecutor:
 
         # All preconditions passed - apply effect if present
         changes = {}
+        return_value = None
         if action.effect is not None:
-            changes = await self._apply_effect(action.effect, evaluator, context)
+            changes, return_value = await self._apply_effect(
+                action.effect, evaluator, context
+            )
 
         # Persist changes to database if any
         if changes and context.session:
@@ -135,10 +145,12 @@ class ActionExecutor:
                 actor_name=actor_name,
                 actor_type=actor_type,
                 success=True,
-                detail={"changes": changes},
+                detail={"changes": changes, "return_value": return_value},
             )
 
-        return ExecutionResult(success=True, error=None, changes=changes)
+        return ExecutionResult(
+            success=True, error=None, changes=changes, return_value=return_value
+        )
 
     def _emit_update_events(
         self,
@@ -182,7 +194,7 @@ class ActionExecutor:
 
     async def _apply_effect(
         self, effect: Any, evaluator: ExpressionEvaluator, context: EvaluationContext
-    ) -> dict[str, Any]:
+    ) -> tuple[dict[str, Any], Any | None]:
         """Apply an effect block to the context.
 
         Args:
@@ -191,16 +203,17 @@ class ActionExecutor:
             context: EvaluationContext to modify
 
         Returns:
-            Dictionary of property changes
+            Tuple of (Dictionary of property changes, Return value if any)
         """
         changes = {}
+        return_value = None
 
         if effect is None:
-            return changes
+            return changes, return_value
 
         statements = getattr(effect, "statements", [])
         if not statements:
-            return changes
+            return changes, return_value
 
         for statement in statements:
             if isinstance(statement, SetStatement):
@@ -211,8 +224,10 @@ class ActionExecutor:
                     statement, evaluator, context
                 )
                 changes.update(call_result)
+            elif isinstance(statement, ReturnStatement):
+                return_value = await evaluator.evaluate(statement.value)
 
-        return changes
+        return changes, return_value
 
     async def _apply_set_statement(
         self, statement: SetStatement, evaluator: ExpressionEvaluator

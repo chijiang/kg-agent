@@ -67,6 +67,11 @@ class TriggerStatement:
 
 
 @dataclass
+class ReturnStatement:
+    value: Any  # AST Expression node
+
+
+@dataclass
 class ForClause:
     variable: str
     entity_type: str
@@ -98,6 +103,7 @@ class ActionResult:
     success: bool
     error: str | None = None
     changes: dict[str, Any] = field(default_factory=dict)
+    return_value: Any | None = None
 
 
 @dataclass

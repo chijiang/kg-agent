@@ -14,6 +14,7 @@ from app.rule_engine.models import (
     SetStatement,
     CallStatement,
     TriggerStatement,
+    ReturnStatement,
 )
 from typing import Any, Union
 
@@ -328,6 +329,13 @@ class ASTTransformer(Transformer):
             arguments=arguments,
             result_var=result_var,
         )
+
+    def return_stmt(self, items):
+        # items: [RETURN, expression]
+        # Filter out the RETURN token
+        parts = [i for i in items if not isinstance(i, Token) or i.type != "RETURN"]
+        value = parts[0] if parts else None
+        return ReturnStatement(value=value)
 
     def path(self, items):
         return ".".join(items)

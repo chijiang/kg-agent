@@ -35,13 +35,15 @@ for_clause: "FOR" "(" binding ")" "{" statement* "}"
 
 binding: CNAME ":" CNAME ["WHERE" expression]
 
-statement: set_stmt | trigger_stmt | for_clause | call_stmt
+statement: set_stmt | trigger_stmt | for_clause | call_stmt | return_stmt
 
 set_stmt: "SET" path EQ expression ";"
 
 trigger_stmt: "TRIGGER" entity_action "ON" CNAME ["WITH" object] ";"
 
 call_stmt: CALL (CNAME | STRING) "." CNAME "(" object ")" [INTO CNAME] ";"
+
+return_stmt: "RETURN" expression ";"
 
 // Expressions
 expression: or_expr
@@ -126,6 +128,7 @@ relationship: REL_START ["[" CNAME "]"] REL_END
 EXISTS: "EXISTS"
 CALL: "CALL"
 INTO: "INTO"
+RETURN: "RETURN"
 
 %import common.WS
 %ignore WS
