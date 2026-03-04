@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package work_ticket;
+
+import "common.proto";
+
+message Survey {
+  string survey_medium = 1;
+  string language = 2;
+}
+
+message GetSurveyRequest {
+  int32 id = 1;
+}
+
+message ListSurveysRequest {
+  string query = 1;
+  PaginationRequest pagination = 2;
+}
+
+message ListSurveysResponse {
+  repeated Survey items = 1;
+  PaginationResponse pagination = 2;
+}
+
+service SurveyService {
+  rpc GetSurvey(GetSurveyRequest) returns (Survey) {}
+  rpc ListSurveys(ListSurveysRequest) returns (ListSurveysResponse) {}
+}

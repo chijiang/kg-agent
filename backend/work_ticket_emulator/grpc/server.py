@@ -1,0 +1,532 @@
+import asyncio
+import logging
+from typing import Optional
+import math
+
+import grpc
+from grpc.aio import ServicerContext
+from sqlalchemy import select, or_, func
+from sqlalchemy.orm import selectinload
+
+from grpc_reflection.v1alpha import reflection
+
+from ..database import async_session_maker
+from ..models import WorkTicket, Survey, TimePeriod, Location, Product, SOInformation
+
+# Import generated protobuf classes
+from . import (
+    common_pb2,
+    location_pb2,
+    location_pb2_grpc,
+    product_pb2,
+    product_pb2_grpc,
+    survey_pb2,
+    survey_pb2_grpc,
+    time_period_pb2,
+    time_period_pb2_grpc,
+    so_information_pb2,
+    so_information_pb2_grpc,
+    work_ticket_pb2,
+    work_ticket_pb2_grpc,
+)
+
+logger = logging.getLogger(__name__)
+
+
+def _safe_str(val) -> str:
+    if val is None:
+        return ""
+    return str(val)
+
+
+def _calc_pagination(
+    total: int, page: int, page_size: int
+) -> common_pb2.PaginationResponse:
+    page = page if page > 0 else 1
+    page_size = page_size if page_size > 0 else 20
+    total_pages = math.ceil(total / page_size) if total > 0 else 0
+    return common_pb2.PaginationResponse(
+        total=total, page=page, page_size=page_size, total_pages=total_pages
+    )
+
+
+# --- Survey Servicer ---
+class SurveyServicer(survey_pb2_grpc.SurveyServiceServicer):
+    async def GetSurvey(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(Survey).where(Survey.id == request.id)
+            )
+            obj = result.scalar_one_or_none()
+            if not obj:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Survey not found")
+            return survey_pb2.Survey(
+                survey_medium=_safe_str(obj.survey_medium),
+                language=_safe_str(obj.language),
+            )
+
+    async def ListSurveys(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(Survey)
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = stmt.where(
+                    or_(Survey.survey_medium.ilike(q), Survey.language.ilike(q))
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            objs = (await session.execute(stmt)).scalars().all()
+
+            items = [
+                survey_pb2.Survey(
+                    survey_medium=_safe_str(o.survey_medium),
+                    language=_safe_str(o.language),
+                )
+                for o in objs
+            ]
+            return survey_pb2.ListSurveysResponse(
+                items=items, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+# --- TimePeriod Servicer ---
+class TimePeriodServicer(time_period_pb2_grpc.TimePeriodServiceServicer):
+    async def GetTimePeriod(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(TimePeriod).where(TimePeriod.id == request.id)
+            )
+            obj = result.scalar_one_or_none()
+            if not obj:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "TimePeriod not found")
+            return time_period_pb2.TimePeriod(
+                interview_end=_safe_str(obj.interview_end),
+                interview_end_month_ops=_safe_str(obj.interview_end_month_ops),
+            )
+
+    async def ListTimePeriods(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(TimePeriod)
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = stmt.where(
+                    or_(
+                        TimePeriod.interview_end.ilike(q),
+                        TimePeriod.interview_end_month_ops.ilike(q),
+                    )
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            objs = (await session.execute(stmt)).scalars().all()
+
+            items = [
+                time_period_pb2.TimePeriod(
+                    interview_end=_safe_str(o.interview_end),
+                    interview_end_month_ops=_safe_str(o.interview_end_month_ops),
+                )
+                for o in objs
+            ]
+            return time_period_pb2.ListTimePeriodsResponse(
+                items=items, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+# --- Location Servicer ---
+class LocationServicer(location_pb2_grpc.LocationServiceServicer):
+    async def GetLocation(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(Location).where(Location.id == request.id)
+            )
+            obj = result.scalar_one_or_none()
+            if not obj:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Location not found")
+            return location_pb2.Location(
+                geo_ops=_safe_str(obj.geo_ops),
+                px_region=_safe_str(obj.px_region),
+                px_sub_region=_safe_str(obj.px_sub_region),
+                sub_region_1=_safe_str(obj.sub_region_1),
+                country_name_ops=_safe_str(obj.country_name_ops),
+            )
+
+    async def ListLocations(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(Location)
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = stmt.where(
+                    or_(
+                        Location.country_name_ops.ilike(q),
+                        Location.geo_ops.ilike(q),
+                        Location.px_region.ilike(q),
+                    )
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            objs = (await session.execute(stmt)).scalars().all()
+
+            items = [
+                location_pb2.Location(
+                    geo_ops=_safe_str(o.geo_ops),
+                    px_region=_safe_str(o.px_region),
+                    px_sub_region=_safe_str(o.px_sub_region),
+                    sub_region_1=_safe_str(o.sub_region_1),
+                    country_name_ops=_safe_str(o.country_name_ops),
+                )
+                for o in objs
+            ]
+            return location_pb2.ListLocationsResponse(
+                items=items, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+# --- Product Servicer ---
+class ProductServicer(product_pb2_grpc.ProductServiceServicer):
+    async def GetProduct(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(Product).where(Product.id == request.id)
+            )
+            obj = result.scalar_one_or_none()
+            if not obj:
+                await context.abort(grpc.StatusCode.NOT_FOUND, "Product not found")
+            return product_pb2.Product(
+                brand_ops=_safe_str(obj.brand_ops),
+                product_group_ops=_safe_str(obj.product_group_ops),
+                product_series=_safe_str(obj.product_series),
+                machine_type_4_digital=_safe_str(obj.machine_type_4_digital),
+            )
+
+    async def ListProducts(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(Product)
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = stmt.where(
+                    or_(
+                        Product.brand_ops.ilike(q),
+                        Product.product_group_ops.ilike(q),
+                        Product.product_series.ilike(q),
+                    )
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            objs = (await session.execute(stmt)).scalars().all()
+
+            items = [
+                product_pb2.Product(
+                    brand_ops=_safe_str(o.brand_ops),
+                    product_group_ops=_safe_str(o.product_group_ops),
+                    product_series=_safe_str(o.product_series),
+                    machine_type_4_digital=_safe_str(o.machine_type_4_digital),
+                )
+                for o in objs
+            ]
+            return product_pb2.ListProductsResponse(
+                items=items, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+# --- SOInformation Servicer ---
+class SOInformationServicer(so_information_pb2_grpc.SOInformationServiceServicer):
+    async def GetSOInformation(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            result = await session.execute(
+                select(SOInformation).where(SOInformation.id == request.id)
+            )
+            obj = result.scalar_one_or_none()
+            if not obj:
+                await context.abort(
+                    grpc.StatusCode.NOT_FOUND, "SOInformation not found"
+                )
+            return so_information_pb2.SOInformation(
+                program=_safe_str(obj.program),
+                trans_servdelivery=_safe_str(obj.trans_servdelivery),
+                warranty=_safe_str(obj.warranty),
+                sdf_code=_safe_str(obj.sdf_code),
+                sdf_description=_safe_str(obj.sdf_description),
+                comm_channel=_safe_str(obj.comm_channel),
+                accounting_indicator_adjusted_ops=_safe_str(
+                    obj.accounting_indicator_adjusted_ops
+                ),
+                service_provider_name_m=_safe_str(obj.service_provider_name_m),
+                primary_vendor_name_m=_safe_str(obj.primary_vendor_name_m),
+            )
+
+    async def ListSOInformations(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(SOInformation)
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = stmt.where(
+                    or_(
+                        SOInformation.program.ilike(q),
+                        SOInformation.warranty.ilike(q),
+                        SOInformation.service_provider_name_m.ilike(q),
+                    )
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            objs = (await session.execute(stmt)).scalars().all()
+
+            items = [
+                so_information_pb2.SOInformation(
+                    program=_safe_str(o.program),
+                    trans_servdelivery=_safe_str(o.trans_servdelivery),
+                    warranty=_safe_str(o.warranty),
+                    sdf_code=_safe_str(o.sdf_code),
+                    sdf_description=_safe_str(o.sdf_description),
+                    comm_channel=_safe_str(o.comm_channel),
+                    accounting_indicator_adjusted_ops=_safe_str(
+                        o.accounting_indicator_adjusted_ops
+                    ),
+                    service_provider_name_m=_safe_str(o.service_provider_name_m),
+                    primary_vendor_name_m=_safe_str(o.primary_vendor_name_m),
+                )
+                for o in objs
+            ]
+            return so_information_pb2.ListSOInformationsResponse(
+                items=items, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+# --- WorkTicket Servicer ---
+class WorkTicketServicer(work_ticket_pb2_grpc.WorkTicketServiceServicer):
+    def _model_to_pb(self, model: WorkTicket) -> work_ticket_pb2.WorkTicket:
+        return work_ticket_pb2.WorkTicket(
+            responseid=_safe_str(model.responseid),
+            osat=model.osat or 0,
+            why_osat_en_mask=_safe_str(model.why_osat_en_mask),
+            first_time_resolution=model.first_time_resolution or 0,
+            ease_use=model.ease_use or 0,
+            survey=survey_pb2.Survey(
+                survey_medium=_safe_str(
+                    model.survey.survey_medium if model.survey else ""
+                ),
+                language=_safe_str(model.survey.language if model.survey else ""),
+            ),
+            time_period=time_period_pb2.TimePeriod(
+                interview_end=_safe_str(
+                    model.time_period.interview_end if model.time_period else ""
+                ),
+                interview_end_month_ops=_safe_str(
+                    model.time_period.interview_end_month_ops
+                    if model.time_period
+                    else ""
+                ),
+            ),
+            location=location_pb2.Location(
+                geo_ops=_safe_str(model.location.geo_ops if model.location else ""),
+                px_region=_safe_str(model.location.px_region if model.location else ""),
+                px_sub_region=_safe_str(
+                    model.location.px_sub_region if model.location else ""
+                ),
+                sub_region_1=_safe_str(
+                    model.location.sub_region_1 if model.location else ""
+                ),
+                country_name_ops=_safe_str(
+                    model.location.country_name_ops if model.location else ""
+                ),
+            ),
+            product=product_pb2.Product(
+                brand_ops=_safe_str(model.product.brand_ops if model.product else ""),
+                product_group_ops=_safe_str(
+                    model.product.product_group_ops if model.product else ""
+                ),
+                product_series=_safe_str(
+                    model.product.product_series if model.product else ""
+                ),
+                machine_type_4_digital=_safe_str(
+                    model.product.machine_type_4_digital if model.product else ""
+                ),
+            ),
+            so_information=so_information_pb2.SOInformation(
+                program=_safe_str(
+                    model.so_information.program if model.so_information else ""
+                ),
+                trans_servdelivery=_safe_str(
+                    model.so_information.trans_servdelivery
+                    if model.so_information
+                    else ""
+                ),
+                warranty=_safe_str(
+                    model.so_information.warranty if model.so_information else ""
+                ),
+                sdf_code=_safe_str(
+                    model.so_information.sdf_code if model.so_information else ""
+                ),
+                sdf_description=_safe_str(
+                    model.so_information.sdf_description if model.so_information else ""
+                ),
+                comm_channel=_safe_str(
+                    model.so_information.comm_channel if model.so_information else ""
+                ),
+                accounting_indicator_adjusted_ops=_safe_str(
+                    model.so_information.accounting_indicator_adjusted_ops
+                    if model.so_information
+                    else ""
+                ),
+                service_provider_name_m=_safe_str(
+                    model.so_information.service_provider_name_m
+                    if model.so_information
+                    else ""
+                ),
+                primary_vendor_name_m=_safe_str(
+                    model.so_information.primary_vendor_name_m
+                    if model.so_information
+                    else ""
+                ),
+            ),
+        )
+
+    async def GetWorkTicket(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = (
+                select(WorkTicket)
+                .where(WorkTicket.responseid == request.responseid)
+                .options(
+                    selectinload(WorkTicket.survey),
+                    selectinload(WorkTicket.time_period),
+                    selectinload(WorkTicket.location),
+                    selectinload(WorkTicket.product),
+                    selectinload(WorkTicket.so_information),
+                )
+            )
+            result = await session.execute(stmt)
+            ticket = result.scalar_one_or_none()
+
+            if not ticket:
+                await context.abort(
+                    grpc.StatusCode.NOT_FOUND,
+                    f"Work Ticket {request.responseid} not found",
+                )
+
+            return self._model_to_pb(ticket)
+
+    async def ListWorkTickets(self, request, context: ServicerContext):
+        async with async_session_maker() as session:
+            stmt = select(WorkTicket).options(
+                selectinload(WorkTicket.survey),
+                selectinload(WorkTicket.time_period),
+                selectinload(WorkTicket.location),
+                selectinload(WorkTicket.product),
+                selectinload(WorkTicket.so_information),
+            )
+
+            if request.query:
+                q = f"%{request.query}%"
+                stmt = (
+                    stmt.join(WorkTicket.location)
+                    .join(WorkTicket.so_information)
+                    .where(
+                        or_(
+                            WorkTicket.responseid.ilike(q),
+                            WorkTicket.why_osat_en_mask.ilike(q),
+                            Location.country_name_ops.ilike(q),
+                            SOInformation.program.ilike(q),
+                        )
+                    )
+                )
+
+            total = await session.scalar(
+                select(func.count()).select_from(stmt.subquery())
+            )
+
+            page = request.pagination.page if request.HasField("pagination") else 1
+            page_size = (
+                request.pagination.page_size if request.HasField("pagination") else 20
+            )
+
+            stmt = stmt.offset((page - 1) * page_size).limit(page_size)
+            result = await session.execute(stmt)
+            tickets = result.scalars().all()
+
+            pb_tickets = [self._model_to_pb(t) for t in tickets]
+            return work_ticket_pb2.ListWorkTicketsResponse(
+                items=pb_tickets, pagination=_calc_pagination(total, page, page_size)
+            )
+
+
+async def serve(host="[::]", port="50052"):
+    """Start the gRPC server"""
+    server = grpc.aio.server()
+
+    # Register all servicers
+    work_ticket_pb2_grpc.add_WorkTicketServiceServicer_to_server(
+        WorkTicketServicer(), server
+    )
+    survey_pb2_grpc.add_SurveyServiceServicer_to_server(SurveyServicer(), server)
+    time_period_pb2_grpc.add_TimePeriodServiceServicer_to_server(
+        TimePeriodServicer(), server
+    )
+    location_pb2_grpc.add_LocationServiceServicer_to_server(LocationServicer(), server)
+    product_pb2_grpc.add_ProductServiceServicer_to_server(ProductServicer(), server)
+    so_information_pb2_grpc.add_SOInformationServiceServicer_to_server(
+        SOInformationServicer(), server
+    )
+
+    service_names = (
+        work_ticket_pb2.DESCRIPTOR.services_by_name["WorkTicketService"].full_name,
+        survey_pb2.DESCRIPTOR.services_by_name["SurveyService"].full_name,
+        time_period_pb2.DESCRIPTOR.services_by_name["TimePeriodService"].full_name,
+        location_pb2.DESCRIPTOR.services_by_name["LocationService"].full_name,
+        product_pb2.DESCRIPTOR.services_by_name["ProductService"].full_name,
+        so_information_pb2.DESCRIPTOR.services_by_name[
+            "SOInformationService"
+        ].full_name,
+        reflection.SERVICE_NAME,
+    )
+    reflection.enable_server_reflection(service_names, server)
+
+    server.add_insecure_port(f"{host}:{port}")
+
+    logger.info(
+        f"Starting work_ticket_emulator gRPC server (SQLite Multi-Service) on {host}:{port}"
+    )
+    await server.start()
+    await server.wait_for_termination()
+
+
+if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+    asyncio.run(serve())

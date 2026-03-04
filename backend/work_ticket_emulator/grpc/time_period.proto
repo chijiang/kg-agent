@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package work_ticket;
+
+import "common.proto";
+
+message TimePeriod {
+  string interview_end = 1;
+  string interview_end_month_ops = 2;
+}
+
+message GetTimePeriodRequest {
+  int32 id = 1;
+}
+
+message ListTimePeriodsRequest {
+  string query = 1;
+  PaginationRequest pagination = 2;
+}
+
+message ListTimePeriodsResponse {
+  repeated TimePeriod items = 1;
+  PaginationResponse pagination = 2;
+}
+
+service TimePeriodService {
+  rpc GetTimePeriod(GetTimePeriodRequest) returns (TimePeriod) {}
+  rpc ListTimePeriods(ListTimePeriodsRequest) returns (ListTimePeriodsResponse) {}
+}

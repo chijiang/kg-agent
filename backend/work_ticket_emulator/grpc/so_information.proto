@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+package work_ticket;
+
+import "common.proto";
+
+message SOInformation {
+  string program = 1;
+  string trans_servdelivery = 2;
+  string warranty = 3;
+  string sdf_code = 4;
+  string sdf_description = 5;
+  string comm_channel = 6;
+  string accounting_indicator_adjusted_ops = 7;
+  string service_provider_name_m = 8;
+  string primary_vendor_name_m = 9;
+}
+
+message GetSOInformationRequest {
+  int32 id = 1;
+}
+
+message ListSOInformationsRequest {
+  string query = 1;
+  PaginationRequest pagination = 2;
+}
+
+message ListSOInformationsResponse {
+  repeated SOInformation items = 1;
+  PaginationResponse pagination = 2;
+}
+
+service SOInformationService {
+  rpc GetSOInformation(GetSOInformationRequest) returns (SOInformation) {}
+  rpc ListSOInformations(ListSOInformationsRequest) returns (ListSOInformationsResponse) {}
+}

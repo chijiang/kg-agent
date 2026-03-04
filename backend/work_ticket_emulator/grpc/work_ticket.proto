@@ -1,0 +1,43 @@
+syntax = "proto3";
+
+package work_ticket;
+
+import "common.proto";
+import "survey.proto";
+import "time_period.proto";
+import "location.proto";
+import "product.proto";
+import "so_information.proto";
+
+message WorkTicket {
+  string responseid = 1;
+  int32 osat = 2;
+  string why_osat_en_mask = 3;
+  int32 first_time_resolution = 4;
+  int32 ease_use = 5;
+  
+  Survey survey = 6;
+  TimePeriod time_period = 7;
+  Location location = 8;
+  Product product = 9;
+  SOInformation so_information = 10;
+}
+
+message GetWorkTicketRequest {
+  string responseid = 1;
+}
+
+message ListWorkTicketsRequest {
+  string query = 1; // Can be simple text search
+  PaginationRequest pagination = 2;
+}
+
+message ListWorkTicketsResponse {
+  repeated WorkTicket items = 1;
+  PaginationResponse pagination = 2;
+}
+
+service WorkTicketService {
+  rpc GetWorkTicket(GetWorkTicketRequest) returns (WorkTicket) {}
+  rpc ListWorkTickets(ListWorkTicketsRequest) returns (ListWorkTicketsResponse) {}
+}
