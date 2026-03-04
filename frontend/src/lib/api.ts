@@ -444,6 +444,9 @@ export const dataProductsApi = {
   triggerSync: (id: number) =>
     api.post<SyncLogResponse>(`/data-products/${id}/sync`),
 
+  triggerSyncAll: () =>
+    api.post<{ status: string }>('/data-products/sync-all'),
+
   getSyncLogs: (id: number, limit = 50) =>
     api.get<SyncLogResponse[]>(`/data-products/${id}/sync-logs`, { params: { limit } }),
 }

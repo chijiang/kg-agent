@@ -227,7 +227,14 @@
     "deleteFailed": "Deletion failed",
     "deleteFailedDesc": "Deletion error",
     "noProducts": "No data products",
-    "noProductsDesc": "Register the first gRPC data product to start data mapping"
+    "noProductsDesc": "Register the first gRPC data product to start data mapping",
+    "syncAll": "Sync All",
+    "syncingAll": "Syncing All...",
+    "syncAllStarted": "Global sync started",
+    "syncAllStartedDesc": "Syncing all data products. This may take a while.",
+    "syncAllSuccess": "Global sync completed successfully",
+    "syncAllFailed": "Global sync failed",
+    "syncAllFailedDesc": "Failed to sync all data products"
   },
   "rules": {
     "title": "Business Logic Manager",

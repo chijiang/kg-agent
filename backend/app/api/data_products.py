@@ -442,6 +442,24 @@ async def trigger_sync(
         )
 
 
+@router.post("/sync-all")
+async def trigger_sync_all(
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
+    """全局同步所有数据产品"""
+    sync_service = SyncService(db)
+    try:
+        result = await sync_service.sync_all_data_products()
+        return result
+    except Exception as e:
+        logger.exception("Global sync failed")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"全局同步失败: {str(e)}",
+        )
+
+
 @router.get("/{product_id}/sync-logs", response_model=List[SyncLogResponse])
 async def list_sync_logs(
     product_id: int,

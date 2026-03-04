@@ -166,8 +166,10 @@ class SyncService:
     def __init__(self, db: AsyncSession):
         self.db = db
 
-    async def sync_data_product(self, product_id: int) -> Dict[str, Any]:
-        """同步整个数据产品"""
+    async def sync_data_product(
+        self, product_id: int, sync_relationships: bool = True
+    ) -> Dict[str, Any]:
+        """同步单个数据产品"""
         # 1. 加载数据产品和所有映射
         result = await self.db.execute(
             select(DataProduct)
@@ -432,10 +434,11 @@ class SyncService:
                             f"Mapping {mapping.ontology_class_name} error: {str(e)}"
                         )
 
-                # 4. 同步关系
-                logger.info("Starting relationship synchronization...")
-                rel_stats = await self._sync_relationships(client, product)
-                total_created += rel_stats.get("created", 0)
+                # 4. 同步关系 (可选)
+                if sync_relationships:
+                    logger.info("Starting relationship synchronization...")
+                    rel_stats = await self._sync_relationships(client, product)
+                    total_created += rel_stats.get("created", 0)
 
             # 5. 完成日志
             sync_log.status = "completed"
@@ -662,3 +665,135 @@ class SyncService:
 
         result = await self.db.execute(query)
         return result.scalars().all()
+
+    async def sync_all_data_products(self) -> Dict[str, Any]:
+        """全局两阶段同步所有激活的数据产品。先拉取所有实体，再拉取所有关系。"""
+        logger.info("Starting global two-phase sync for all active data products")
+
+        # 获取所有激活的数据产品
+        result = await self.db.execute(
+            select(DataProduct)
+            .options(
+                selectinload(DataProduct.entity_mappings).selectinload(
+                    EntityMapping.property_mappings
+                )
+            )
+            .where(DataProduct.is_active == True)
+        )
+        products = result.scalars().all()
+
+        if not products:
+            logger.info("No active data products found for global sync.")
+            return {
+                "status": "completed",
+                "message": "No active data products to sync.",
+            }
+
+        # 记录每个产品的日志 ID
+        product_log_map = {}
+        for product in products:
+            sync_log = SyncLog(
+                data_product_id=product.id,
+                sync_type="manual",
+                direction="pull",
+                status="started",
+                started_at=datetime.now(timezone.utc).replace(tzinfo=None),
+            )
+            self.db.add(sync_log)
+            # 暂时存储引用以便后续更新
+            product_log_map[product.id] = {
+                "log": sync_log,
+                "processed": 0,
+                "created": 0,
+                "updated": 0,
+                "failed": 0,
+                "errors": [],
+            }
+
+        await self.db.commit()
+
+        # ====== Phase 1: Sink Entities ======
+        logger.info("Global Sync Phase 1: Syncing all entities")
+        for product in products:
+            try:
+                # 重用已有的单品同步逻辑，但闭源其自身的关系构建
+                sync_result = await self.sync_data_product(
+                    product.id, sync_relationships=False
+                )
+
+                # 获取已经更新过的日志
+                latest_log_result = await self.db.execute(
+                    select(SyncLog)
+                    .where(
+                        and_(
+                            SyncLog.data_product_id == product.id,
+                            SyncLog.status.in_(["completed", "failed"]),
+                        )
+                    )
+                    .order_by(SyncLog.started_at.desc())
+                    .limit(1)
+                )
+                latest_log = latest_log_result.scalar_one_or_none()
+                if latest_log:
+                    # Update our local tracker for phase 2 aggregation
+                    product_log_map[product.id].update(
+                        {
+                            "processed": latest_log.records_processed or 0,
+                            "created": latest_log.records_created or 0,
+                            "updated": latest_log.records_updated or 0,
+                            "failed": latest_log.records_failed or 0,
+                            "log": latest_log,
+                        }
+                    )
+
+            except Exception as e:
+                logger.error(f"Failed to sync entities for product {product.id}: {e}")
+                product_log_map[product.id]["failed"] += 1
+                product_log_map[product.id]["errors"].append(str(e))
+
+        # ====== Phase 2: Build Relationships ======
+        logger.info("Global Sync Phase 2: Syncing all relationships")
+        for product in products:
+            try:
+                # Re-fetch product with correct mappings loaded specifically for _sync_relationships
+                prod_result = await self.db.execute(
+                    select(DataProduct)
+                    .options(
+                        selectinload(DataProduct.entity_mappings).selectinload(
+                            EntityMapping.target_relationship_mappings
+                        )
+                    )
+                    .where(DataProduct.id == product.id)
+                )
+                full_product = prod_result.scalar_one_or_none()
+
+                if full_product:
+                    async with DynamicGrpcClient(
+                        full_product.grpc_host, full_product.grpc_port
+                    ) as client:
+                        rel_stats = await self._sync_relationships(client, full_product)
+
+                        target_log_entry = product_log_map[product.id]
+                        cur_log = target_log_entry["log"]
+
+                        target_log_entry["created"] += rel_stats.get("created", 0)
+                        target_log_entry["failed"] += rel_stats.get("failed", 0)
+
+                        # Update the log back
+                        cur_log.records_created = target_log_entry["created"]
+                        cur_log.records_failed = target_log_entry["failed"]
+                        if target_log_entry["errors"]:
+                            cur_log.error_message = "\\n".join(
+                                target_log_entry["errors"][:10]
+                            )
+
+                        self.db.add(cur_log)
+                        await self.db.commit()
+
+            except Exception as e:
+                logger.error(
+                    f"Failed to sync relationships for product {product.id}: {e}"
+                )
+
+        logger.info("Global two-phase sync complete.")
+        return {"status": "completed"}

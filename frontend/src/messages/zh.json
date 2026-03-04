@@ -227,7 +227,14 @@
     "deleteFailed": "删除失败",
     "deleteFailedDesc": "删除出错",
     "noProducts": "暂无数据产品",
-    "noProductsDesc": "注册第一个 gRPC 数据产品以开始数据映射"
+    "noProductsDesc": "注册第一个 gRPC 数据产品以开始数据映射",
+    "syncAll": "全部同步",
+    "syncingAll": "同步中...",
+    "syncAllStarted": "全局同步已启动",
+    "syncAllStartedDesc": "正在同步所有数据产品，这可能需要一些时间。",
+    "syncAllSuccess": "全局同步成功",
+    "syncAllFailed": "全局同步失败",
+    "syncAllFailedDesc": "同步所有数据产品时发生错误"
   },
   "rules": {
     "title": "业务逻辑管理器",
