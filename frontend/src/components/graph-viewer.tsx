@@ -48,6 +48,7 @@ export function GraphViewer() {
   }, [token])
 
   useEffect(() => {
+    isMountedRef.current = true
     return () => { isMountedRef.current = false }
   }, [])
 
@@ -169,7 +170,7 @@ export function GraphViewer() {
 
   const loadInitialGraph = async () => {
     // Early return if cytoscape is not ready
-    if (!cyRef.current || !isMountedRef.currentRef.current) return
+    if (!cyRef.current || !isMountedRef.current) return
 
     try {
       const res = await graphApi.getStatistics()
@@ -242,7 +243,7 @@ export function GraphViewer() {
     } catch (err) {
       console.error('Failed to load graph:', err)
       // 显示错误提示节点
-      if (cyRef.current && isMounted) {
+      if (cyRef.current && isMountedRef.current) {
         cyRef.current.json({
           elements: [{
             data: {

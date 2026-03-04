@@ -75,6 +75,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
     }, [token])
 
     useEffect(() => {
+        isMountedRef.current = true
         return () => { isMountedRef.current = false }
     }, [])
 
@@ -235,7 +236,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
     }, [searchParams, token, refreshTrigger])
 
     const loadRandomGraph = async () => {
-        if (!cyRef.current || !isMounted) return
+        if (!cyRef.current || !isMountedRef.current) return
         setLoading(true)
         setNoData(false)
 
@@ -288,7 +289,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
                 }
             })
 
-            if (!cyRef.current || !isMounted) return
+            if (!cyRef.current || !isMountedRef.current) return
 
             cyRef.current.json({ elements })
 
@@ -337,7 +338,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
     }
 
     const loadInstances = async () => {
-        if (!cyRef.current || !isMounted || !searchParams) return
+        if (!cyRef.current || !isMountedRef.current || !searchParams) return
 
         setLoading(true)
         setNoData(false)
@@ -441,7 +442,7 @@ export function InstanceGraphViewer({ searchParams, onNodeSelect, refreshTrigger
                 }
             }
 
-            if (!cyRef.current || !isMounted) return
+            if (!cyRef.current || !isMountedRef.current) return
 
             cyRef.current.json({ elements })
 

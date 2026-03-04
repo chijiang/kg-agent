@@ -67,6 +67,7 @@ export function SchemaViewer({
     }, [onNodeSelect, onEdgeSelect])
 
     useEffect(() => {
+        isMountedRef.current = true
         return () => { isMountedRef.current = false }
     }, [])
 

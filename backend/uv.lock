@@ -1288,7 +1288,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "httpx" },
     { name = "pytest" },
     { name = "pytest-asyncio" },
     { name = "pytest-cov" },
@@ -1302,7 +1301,7 @@ requires-dist = [
     { name = "asyncpg", specifier = ">=0.29.0" },
     { name = "cryptography", specifier = ">=44.0.0" },
     { name = "fastapi", specifier = ">=0.115.0" },
-    { name = "fastmcp" },
+    { name = "fastmcp", specifier = ">=2.0.0" },
     { name = "greenlet", specifier = ">=3.3.1" },
     { name = "grpcio", specifier = ">=1.60.0" },
     { name = "grpcio-reflection", specifier = ">=1.78.0" },
@@ -1327,7 +1326,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "httpx", specifier = ">=0.28.0" },
     { name = "pytest", specifier = ">=8.3.0" },
     { name = "pytest-asyncio", specifier = ">=0.24.0" },
     { name = "pytest-cov", specifier = ">=6.0.0" },

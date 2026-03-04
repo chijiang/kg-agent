@@ -113,7 +113,9 @@ def _eval_node(node: ast.AST, variables: Dict[str, Any]) -> Any:
         op_func = _SAFE_EVAL_OPS.get(type(node.op))
         if op_func is None:
             raise ValueError(f"Unsupported operator: {type(node.op).__name__}")
-        return op_func(_eval_node(node.left, variables), _eval_node(node.right, variables))
+        return op_func(
+            _eval_node(node.left, variables), _eval_node(node.right, variables)
+        )
     if isinstance(node, ast.UnaryOp):
         op_func = _SAFE_EVAL_OPS.get(type(node.op))
         if op_func is None:
@@ -125,7 +127,11 @@ def _eval_node(node: ast.AST, variables: Dict[str, Any]) -> Any:
         return obj[idx]
     if isinstance(node, ast.IfExp):
         test = _eval_node(node.test, variables)
-        return _eval_node(node.body, variables) if test else _eval_node(node.orelse, variables)
+        return (
+            _eval_node(node.body, variables)
+            if test
+            else _eval_node(node.orelse, variables)
+        )
     if isinstance(node, ast.Compare):
         left = _eval_node(node.left, variables)
         for op, comparator in zip(node.ops, node.comparators):
@@ -182,7 +188,7 @@ class SyncService:
             sync_type="manual",
             direction="pull",
             status="started",
-            started_at=datetime.now(timezone.utc),
+            started_at=datetime.now(timezone.utc).replace(tzinfo=None),
         )
         self.db.add(sync_log)
         await self.db.commit()
@@ -433,7 +439,7 @@ class SyncService:
 
             # 5. 完成日志
             sync_log.status = "completed"
-            sync_log.completed_at = datetime.now(timezone.utc)
+            sync_log.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             sync_log.records_processed = total_processed
             sync_log.records_created = total_created
             sync_log.records_updated = total_updated
@@ -446,7 +452,7 @@ class SyncService:
         except Exception as e:
             logger.exception("Global sync error")
             sync_log.status = "failed"
-            sync_log.completed_at = datetime.now(timezone.utc)
+            sync_log.completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
             sync_log.error_message = str(e)
             await self.db.commit()
             raise
