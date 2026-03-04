@@ -226,6 +226,7 @@ class ActionExecutor:
                 changes.update(call_result)
             elif isinstance(statement, ReturnStatement):
                 return_value = await evaluator.evaluate(statement.value)
+                break  # RETURN short-circuits remaining statements
 
         return changes, return_value
 
@@ -333,7 +334,7 @@ class ActionExecutor:
         )
 
         # 4. Store result in context variables if INTO was specified
-        if statement.result_var and response:
+        if statement.result_var and response is not None:
             context.variables[statement.result_var] = response
 
         return {}  # CALL doesn't directly modify graph properties

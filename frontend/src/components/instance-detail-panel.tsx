@@ -190,7 +190,8 @@ export function InstanceDetailPanel({ node, onClose, onUpdate }: InstanceDetailP
 
             if (res.data?.success) {
                 if (res.data.return_value !== undefined && res.data.return_value !== null) {
-                    const valueStr = typeof res.data.return_value === 'object' ? JSON.stringify(res.data.return_value, null, 2) : String(res.data.return_value)
+                    const rawStr = typeof res.data.return_value === 'object' ? JSON.stringify(res.data.return_value, null, 2) : String(res.data.return_value)
+                    const valueStr = rawStr.length > 200 ? rawStr.slice(0, 200) + '...' : rawStr
                     toast.success(res.data.message || t('components.instance.actionSuccess'), {
                         description: t('components.instance.actionReturned', { result: valueStr }),
                         duration: 8000,

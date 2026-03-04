@@ -178,7 +178,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
             if (match) {
                 const onFailureMatch = lines[lines.indexOf(line) + 1]?.match(/ON_FAILURE:\s*"(.*)"/);
                 preconditions.push({
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'PRECONDITION',
                     label: match[1],
                     conditions: match[2].trim(),
@@ -202,7 +202,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
             const match = line.match(/SET\s+([^=]+)\s*=\s*(.*);/);
             if (match) {
                 stack[stack.length - 1].push({
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'SET',
                     target: match[1].trim(),
                     value: match[2].trim().replace(/;$/, '')
@@ -215,7 +215,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
             if (match) {
                 const parts = match[1].split('.');
                 stack[stack.length - 1].push({
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'TRIGGER',
                     actionEntity: parts[0],
                     actionName: parts[1] || '',
@@ -228,7 +228,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
             const match = line.match(/FOR\s*\(([^:]+):\s*(\w+)(?:\s+WHERE\s+(.*))?\)\s*\{/);
             if (match) {
                 const newBlock: LogicBlockData = {
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'FOR',
                     variable: match[1].trim(),
                     entity: match[2].trim(),
@@ -258,7 +258,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
                     });
                 }
                 stack[stack.length - 1].push({
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'CALL',
                     dataProduct: productName,
                     methodName: methodName,
@@ -272,7 +272,7 @@ const parseDslToBlocks = (dsl: string, mode: 'RULE' | 'ACTION'): { statements: L
             const match = line.match(/RETURN\s+(.*);/);
             if (match) {
                 stack[stack.length - 1].push({
-                    id: Math.random().toString(36).substr(2, 9),
+                    id: Math.random().toString(36).substring(2, 11),
                     type: 'RETURN',
                     value: match[1].trim()
                 });
@@ -786,7 +786,7 @@ export default function BusinessEditor({ mode, initialDsl, onDslChange, schema, 
 
     // Actions
     const addStatement = (parentId: string | null, type: BlockType) => {
-        const newId = Math.random().toString(36).substr(2, 9);
+        const newId = Math.random().toString(36).substring(2, 11);
         let newStmt: LogicBlockData;
 
         if (type === 'SET') {

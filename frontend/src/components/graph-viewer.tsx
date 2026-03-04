@@ -38,7 +38,7 @@ export function GraphViewer() {
   const token = useAuthStore((state) => state.token)
   const containerRef = useRef<HTMLDivElement>(null)
   const cyRef = useRef<Core | null>(null)
-  const [selectedNode, setSelectedNode] = useState<Record<string, any> | null>(null)
+  const [selectedNode, setSelectedNode] = useState<Record<string, unknown> | null>(null)
   const isMountedRef = useRef(true)
   const tokenRef = useRef(token)
 
