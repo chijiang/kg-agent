@@ -19,11 +19,11 @@ async def init_db():
         # 检查是否已有用户
         result = await session.execute(select(User).where(User.username == "admin"))
         if not result.scalar_one_or_none():
-            password = generate_random_password()
+            # password = generate_random_password()
+            password = "admin123"
             admin = User(
                 username="admin",
-                password_hash=hash_password("admin123"),
-                # password_hash=hash_password(password),
+                password_hash=hash_password(password),
                 email="admin@example.com",
                 approval_status="approved",
                 is_admin=True
