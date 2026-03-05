@@ -74,6 +74,25 @@ export const configApi = {
   //   api.post('/config/test/postgresql', data),
 }
 
+export interface MCPConfig {
+  id: number
+  name: string
+  url: string
+  mcp_type: string
+  is_active: boolean
+  created_at: string
+  updated_at: string
+}
+
+export const mcpApi = {
+  list: () => api.get<MCPConfig[]>('/mcp'),
+  create: (data: { name: string; url: string; mcp_type?: string; is_active?: boolean }) =>
+    api.post<MCPConfig>('/mcp', data),
+  update: (id: number, data: { name?: string; url?: string; mcp_type?: string; is_active?: boolean }) =>
+    api.put<MCPConfig>(`/mcp/${id}`, data),
+  delete: (id: number) => api.delete(`/mcp/${id}`),
+}
+
 export const chatApi = {
   stream: (query: string, token: string, conversationId?: number, mode: 'llm' | 'non-llm' = 'llm') => {
     return fetch(`${process.env.NEXT_PUBLIC_API_URL || '/api'}/chat/v2/stream`, {
