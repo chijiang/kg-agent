@@ -14,7 +14,7 @@ export function ThinkingProcess({ content }: ThinkingProcessProps) {
     const steps = content.split(/\n?\s*>\s*/g).filter((s) => s.trim().length > 0)
 
     return (
-        <div className="flex flex-col gap-3 py-1">
+        <div className="flex flex-col gap-3 py-1 w-full min-w-0">
             {steps.map((step, index) => {
                 const isToolCall = step.includes('**Calling tool**:')
                 const toolMatch = step.match(/\*\*Calling tool\*\*:\s*`([^`]+)`/)
@@ -27,7 +27,7 @@ export function ThinkingProcess({ content }: ThinkingProcessProps) {
                 }
 
                 return (
-                    <div key={index} className="flex gap-3 group">
+                    <div key={index} className="flex gap-3 group w-full min-w-0 overflow-hidden">
                         {/* Timeline connector */}
                         <div className="flex flex-col items-center">
                             <div className={`mt-1 flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center border ${isToolCall ? 'bg-orange-50 border-orange-200 text-orange-600' : 'bg-primary/5 border-primary/20 text-primary'
@@ -40,7 +40,7 @@ export function ThinkingProcess({ content }: ThinkingProcessProps) {
                         </div>
 
                         {/* Step content */}
-                        <div className="flex-1 pb-2">
+                        <div className="flex-1 pb-2 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                                 <span className={`text-[11px] font-semibold uppercase tracking-wider ${isToolCall ? 'text-orange-700' : 'text-primary/80'
                                     }`}>
@@ -51,7 +51,7 @@ export function ThinkingProcess({ content }: ThinkingProcessProps) {
                                 )}
                             </div>
 
-                            <div className="prose prose-sm max-w-none text-[12px] text-slate-600 prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-orange-600 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:border-none prose-pre:p-3 prose-pre:rounded-lg">
+                            <div className="prose prose-sm max-w-none text-[12px] text-slate-600 overflow-x-auto prose-code:bg-slate-100 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-orange-600 prose-pre:bg-slate-900 prose-pre:text-slate-100 prose-pre:border-none prose-pre:p-3 prose-pre:rounded-lg">
                                 <ReactMarkdown remarkPlugins={[remarkGfm]}>
                                     {cleanContent || '...'}
                                 </ReactMarkdown>

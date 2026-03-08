@@ -273,7 +273,7 @@ export function Chat({ onGraphData, conversationId, initialMessages, onConversat
                 </button>
               )}
               {expandedThinking === i && msg.thinking && (
-                <div className="mb-3 px-4 py-3 bg-slate-50/50 rounded-xl border border-slate-100 shadow-sm">
+                <div className="mb-3 px-4 py-3 bg-slate-50/50 rounded-xl border border-slate-100 shadow-sm w-full min-w-0 overflow-hidden">
                   <ThinkingProcess content={msg.thinking} />
                 </div>
               )}
