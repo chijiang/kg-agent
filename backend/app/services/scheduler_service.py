@@ -25,6 +25,25 @@ from app.services.task_executor import TaskExecutor
 logger = logging.getLogger(__name__)
 
 
+# Global reference for APScheduler jobs (to avoid pickling issues with persistent storage)
+_global_scheduler_instance: Optional["SchedulerService"] = None
+
+
+async def _job_executor_wrapper(task_id: int) -> None:
+    """Standalone wrapper function for APScheduler jobs to avoid instance pickling issues.
+
+    This function is used as the job target in APScheduler. It delegates execution
+    to the globally available SchedulerService instance.
+    """
+    if _global_scheduler_instance:
+        await _global_scheduler_instance._execute_scheduled_task(task_id)
+    else:
+        # Fallback for when the service hasn't been initialized yet or in different context
+        logger.error(
+            f"Cannot execute task {task_id}: SchedulerService instance not globally available"
+        )
+
+
 class SchedulerService:
     """Service for managing APScheduler and scheduled tasks.
 
@@ -42,6 +61,7 @@ class SchedulerService:
         db_session_factory: async_sessionmaker[AsyncSession],
         max_concurrent_tasks: int = 10,
         default_timeout: int = 300,
+        rule_engine: Any = None,
     ):
         """Initialize the SchedulerService.
 
@@ -51,19 +71,16 @@ class SchedulerService:
             default_timeout: Default timeout in seconds for task execution
         """
         # Configure jobstores with SQLAlchemyJobStore
-        # Note: APScheduler requires synchronous URL, so we replace asyncpg with psycopg2
-        sync_db_url = settings.DATABASE_URL.replace("+asyncpg", "").replace("postgresql+asyncpg", "postgresql")
+        # Note: APScheduler requires synchronous URL, so we use psycopg (v3) which is already in dependencies
+        sync_db_url = settings.DATABASE_URL.replace(
+            "postgresql+asyncpg", "postgresql+psycopg"
+        )
         jobstores = {
-            "default": SQLAlchemyJobStore(
-                url=sync_db_url,
-                tablename="apscheduler_jobs"
-            )
+            "default": SQLAlchemyJobStore(url=sync_db_url, tablename="apscheduler_jobs")
         }
 
         # Configure executors
-        executors = {
-            "default": AsyncIOExecutor()
-        }
+        executors = {"default": AsyncIOExecutor()}
 
         # Configure job defaults
         job_defaults = {
@@ -77,12 +94,20 @@ class SchedulerService:
             jobstores=jobstores,
             executors=executors,
             job_defaults=job_defaults,
-            timezone="UTC"
+            timezone="UTC",
         )
 
         self.db_session_factory = db_session_factory
-        self.executor = TaskExecutor(max_concurrent_tasks, default_timeout)
+        self.executor = TaskExecutor(
+            max_concurrent_tasks=max_concurrent_tasks,
+            default_timeout=default_timeout,
+            rule_engine=rule_engine,
+        )
         self.repository: Optional[ScheduledTaskRepository] = None
+
+        # Set global instance for job execution
+        global _global_scheduler_instance
+        _global_scheduler_instance = self
 
     async def initialize(self) -> None:
         """Initialize the scheduler and load enabled tasks from database.
@@ -170,13 +195,11 @@ class SchedulerService:
         try:
             trigger = CronTrigger.from_crontab(task.cron_expression, timezone="UTC")
         except Exception as e:
-            raise ValueError(
-                f"Invalid cron expression '{task.cron_expression}': {e}"
-            )
+            raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
 
         # Add the job to the scheduler
         self.scheduler.add_job(
-            func=self._execute_scheduled_task,
+            func=_job_executor_wrapper,
             trigger=trigger,
             id=job_id,
             args=[task.id],
@@ -276,9 +299,7 @@ class SchedulerService:
                     )
 
             except Exception as e:
-                logger.exception(
-                    f"Unexpected error executing task {task_id}: {e}"
-                )
+                logger.exception(f"Unexpected error executing task {task_id}: {e}")
 
     async def trigger_task_manually(self, task_id: int) -> Dict[str, Any]:
         """Manually trigger a task execution.
@@ -319,7 +340,9 @@ class SchedulerService:
             {
                 "id": job.id,
                 "name": job.name,
-                "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+                "next_run_time": (
+                    job.next_run_time.isoformat() if job.next_run_time else None
+                ),
                 "trigger": str(job.trigger),
             }
             for job in jobs
@@ -343,7 +366,9 @@ class SchedulerService:
         return {
             "id": job.id,
             "name": job.name,
-            "next_run_time": job.next_run_time.isoformat() if job.next_run_time else None,
+            "next_run_time": (
+                job.next_run_time.isoformat() if job.next_run_time else None
+            ),
             "trigger": str(job.trigger),
         }
 

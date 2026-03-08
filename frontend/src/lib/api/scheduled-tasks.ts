@@ -56,6 +56,18 @@ export const scheduledTasksApi = {
   triggerSync: (taskId: number) =>
     api.post(`/scheduled-tasks/${taskId}/trigger`),
 
+  getMappingSyncSchedule: (mappingId: number) =>
+    api.get<ScheduledTask | null>(`/data-products/mappings/${mappingId}/sync-schedule`),
+
+  setMappingSyncSchedule: (mappingId: number, template: CronTemplate) =>
+    api.put<ScheduledTask>(`/data-products/mappings/${mappingId}/sync-schedule`, template),
+
+  deleteMappingSyncSchedule: (mappingId: number) =>
+    api.delete(`/data-products/mappings/${mappingId}/sync-schedule`),
+
+  getMappingSyncHistory: (mappingId: number, limit = 20) =>
+    api.get<TaskExecution[]>(`/data-products/mappings/${mappingId}/sync-history?limit=${limit}`),
+
   getRuleSchedule: (ruleId: number) =>
     api.get<ScheduledTask | null>(`/rules/${ruleId}/schedule`),
 

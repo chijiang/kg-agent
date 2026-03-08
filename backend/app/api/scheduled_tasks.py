@@ -6,7 +6,7 @@ that support cron-based scheduling for data synchronization and rule execution.
 """
 
 from typing import List, Optional
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
@@ -27,12 +27,15 @@ from app.repositories.scheduled_task_repository import (
     TaskExecutionRepository,
 )
 
-router = APIRouter(prefix="/api/scheduled-tasks", tags=["scheduled-tasks"])
+router = APIRouter(prefix="/scheduled-tasks", tags=["scheduled-tasks"])
 
 
-@router.post("/", response_model=ScheduledTaskResponse, status_code=status.HTTP_201_CREATED)
+@router.post(
+    "/", response_model=ScheduledTaskResponse, status_code=status.HTTP_201_CREATED
+)
 async def create_scheduled_task(
     task_data: ScheduledTaskCreate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Create a new scheduled task."""
@@ -49,6 +52,17 @@ async def create_scheduled_task(
     # Create the task
     task = ScheduledTask(**task_data.model_dump())
     created = await repo.create(task)
+
+    # Schedule the task if it's enabled
+    if created.is_enabled:
+        scheduler_service = request.app.state.scheduler_service
+        try:
+            await scheduler_service.schedule_task(created)
+        except Exception as e:
+            # If scheduling fails, we should still return the task but log the error
+            # Or we could return an error, but the task is already in DB.
+            # For now, let's log and continue
+            print(f"Failed to schedule new task {created.id}: {e}")
 
     return created
 
@@ -95,6 +109,7 @@ async def get_scheduled_task(
 async def update_scheduled_task(
     task_id: int,
     updates: ScheduledTaskUpdate,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Update a scheduled task."""
@@ -121,12 +136,23 @@ async def update_scheduled_task(
             detail=f"Task {task_id} not found",
         )
 
+    # Reschedule the task
+    scheduler_service = request.app.state.scheduler_service
+    try:
+        if task.is_enabled:
+            await scheduler_service.reschedule_task(task)
+        else:
+            await scheduler_service.unschedule_task(task_id)
+    except Exception as e:
+        print(f"Failed to reschedule task {task_id}: {e}")
+
     return task
 
 
 @router.delete("/{task_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_scheduled_task(
     task_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Delete a scheduled task."""
@@ -139,12 +165,17 @@ async def delete_scheduled_task(
             detail=f"Task {task_id} not found",
         )
 
+    # Unschedule from scheduler
+    scheduler_service = request.app.state.scheduler_service
+    await scheduler_service.unschedule_task(task_id)
+
     return None
 
 
 @router.post("/{task_id}/pause", response_model=dict)
 async def pause_scheduled_task(
     task_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Pause a scheduled task."""
@@ -160,12 +191,17 @@ async def pause_scheduled_task(
     # Update to disabled
     await repo.update(task_id, {"is_enabled": False})
 
+    # Pause in scheduler
+    scheduler_service = request.app.state.scheduler_service
+    await scheduler_service.pause_task(task_id)
+
     return {"status": "paused", "task_id": task_id}
 
 
 @router.post("/{task_id}/resume", response_model=dict)
 async def resume_scheduled_task(
     task_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Resume a paused scheduled task."""
@@ -181,12 +217,17 @@ async def resume_scheduled_task(
     # Update to enabled
     await repo.update(task_id, {"is_enabled": True})
 
+    # Resume in scheduler
+    scheduler_service = request.app.state.scheduler_service
+    await scheduler_service.resume_task(task_id)
+
     return {"status": "resumed", "task_id": task_id}
 
 
 @router.post("/{task_id}/trigger", response_model=ManualTriggerResponse)
 async def trigger_scheduled_task(
     task_id: int,
+    request: Request,
     db: AsyncSession = Depends(get_db),
 ):
     """Manually trigger a task execution.
@@ -203,14 +244,21 @@ async def trigger_scheduled_task(
             detail=f"Task {task_id} not found",
         )
 
-    # TODO: Implement actual trigger via scheduler service
-    # For now, return a mock response indicating the feature requires scheduler
-    return ManualTriggerResponse(
-        execution_id=0,  # Mock ID
-        task_id=task_id,
-        status="pending",
-        message="Manual trigger requires scheduler service integration",
-    )
+    # Trigger via scheduler service
+    scheduler_service = request.app.state.scheduler_service
+    try:
+        result = await scheduler_service.trigger_task_manually(task_id)
+        return ManualTriggerResponse(
+            execution_id=result.get("execution_id", 0),
+            task_id=task_id,
+            status=result.get("status", "pending"),
+            message="Task triggered successfully",
+        )
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to trigger task: {str(e)}",
+        )
 
 
 @router.get("/{task_id}/status", response_model=dict)

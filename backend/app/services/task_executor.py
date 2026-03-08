@@ -64,6 +64,7 @@ class TaskExecutor:
         self,
         max_concurrent_tasks: int = 10,
         default_timeout: int = 300,
+        rule_engine: Any = None,
     ):
         """Initialize the TaskExecutor.
 
@@ -73,9 +74,11 @@ class TaskExecutor:
         """
         self.semaphore = asyncio.Semaphore(max_concurrent_tasks)
         self.default_timeout = default_timeout
+        self.rule_engine = rule_engine
         self.running_tasks: Dict[int, asyncio.Task] = {}
         self._task_executors: Dict[str, Callable] = {
             "sync": self._execute_sync_task,
+            "sync_mapping": self._execute_sync_mapping_task,
             "rule": self._execute_rule_task,
         }
 
@@ -148,7 +151,9 @@ class TaskExecutor:
                         # Success - update execution record
                         async with session_factory() as session:
                             exec_repo = TaskExecutionRepository(session)
-                            completed_at = datetime.now(timezone.utc).replace(tzinfo=None)
+                            completed_at = datetime.now(timezone.utc).replace(
+                                tzinfo=None
+                            )
                             duration = (
                                 completed_at - execution.started_at
                             ).total_seconds()
@@ -204,7 +209,9 @@ class TaskExecutor:
                         # Check if we should retry
                         if retry_count < task.max_retries:
                             retry_count += 1
-                            delay = task.retry_interval_seconds * (2 ** (retry_count - 1))
+                            delay = task.retry_interval_seconds * (
+                                2 ** (retry_count - 1)
+                            )
 
                             logger.info(
                                 f"Task {task.id} ({task.task_name}) failed with "
@@ -321,6 +328,36 @@ class TaskExecutor:
 
             return result
 
+    async def _execute_sync_mapping_task(
+        self,
+        task: ScheduledTask,
+        session_factory: async_sessionmaker[AsyncSession],
+    ) -> Dict[str, Any]:
+        """Execute a granular entity mapping sync task.
+
+        Args:
+            task: The ScheduledTask to execute (task_type='sync_mapping')
+            session_factory: Async session factory for database operations
+
+        Returns:
+            Dictionary containing sync results
+        """
+        async with session_factory() as session:
+            sync_service = SyncService(session)
+            result = await sync_service.sync_entity_mapping(
+                mapping_id=task.target_id,
+            )
+
+            logger.info(
+                f"Sync mapping task {task.id} (Mapping {task.target_id}) completed: "
+                f"processed={result.get('processed', 0)}, "
+                f"created={result.get('created', 0)}, "
+                f"updated={result.get('updated', 0)}, "
+                f"failed={result.get('failed', 0)}"
+            )
+
+            return result
+
     async def _execute_rule_task(
         self,
         task: ScheduledTask,
@@ -336,14 +373,32 @@ class TaskExecutor:
             Dictionary containing rule execution results
 
         Raises:
-            NotImplementedError: Rule execution is not yet implemented
+            Exception: If rule execution fails
         """
-        # TODO: Implement rule execution
-        # This will integrate with the rule engine when ready
-        raise NotImplementedError(
-            "Rule execution is not yet implemented. "
-            "This is a placeholder for future rule task execution."
-        )
+        if self.rule_engine is None:
+            raise RuntimeError("RuleEngine not initialized in TaskExecutor")
+
+        async with session_factory() as session:
+            # Call the rule engine to execute the rule by its target_id (Rule ID)
+            result = await self.rule_engine.execute_rule_by_id(
+                rule_id=task.target_id, session=session
+            )
+
+            # Commit the session to persist any changes made by the rule
+            await session.commit()
+
+            logger.info(
+                f"Rule task {task.id} (Rule {task.target_id}) completed: "
+                f"success={result.get('success')}, "
+                f"affected={result.get('entities_affected', 0)}"
+            )
+
+            if not result.get("success"):
+                raise Exception(
+                    result.get("error", "Unknown error during rule execution")
+                )
+
+            return result
 
     def _should_retry(self, error: Exception) -> bool:
         """Determine if an error is retryable based on pattern matching.

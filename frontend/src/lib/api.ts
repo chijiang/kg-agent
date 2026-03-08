@@ -287,6 +287,15 @@ export const rulesApi = {
 
   listLogs: (limit: number = 100) =>
     api.get<{ logs: ExecutionLog[] }>('/api/rules/logs', { params: { limit } }),
+
+  getSchedule: (name: string) =>
+    api.get<any>(`/api/rules/${encodeURIComponent(name)}/schedule`),
+
+  setSchedule: (name: string, data: any) =>
+    api.put(`/api/rules/${encodeURIComponent(name)}/schedule`, data),
+
+  deleteSchedule: (name: string) =>
+    api.delete(`/api/rules/${encodeURIComponent(name)}/schedule`),
 }
 
 export const actionsApi = {
@@ -354,6 +363,7 @@ export interface EntityMapping {
   created_at: string
   updated_at: string
   property_mapping_count: number
+  has_schedule: boolean
 }
 
 export interface PropertyMapping {

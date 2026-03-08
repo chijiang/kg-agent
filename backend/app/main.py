@@ -23,6 +23,7 @@ from app.api import (
     mcp,
     scheduled_tasks,
 )
+from app.services.scheduler_service import SchedulerService
 from app.core.database import engine, Base, async_session, get_db
 import app.models  # Implicitly registers models
 
@@ -67,6 +68,7 @@ async def lifespan(app: FastAPI):
         rule_registry,
         db_session=None,
         session_provider=async_session,
+        action_executor=action_executor,
     )
 
     # Connect event emitter to rule engine
@@ -131,6 +133,15 @@ async def lifespan(app: FastAPI):
     rules.init_rules_api(rule_registry, rule_storage)
     init_permission_service(action_registry)
 
+    # Initialize SchedulerService
+    scheduler_service = SchedulerService(
+        db_session_factory=async_session,
+        max_concurrent_tasks=settings.SCHEDULER_MAX_CONCURRENT,
+        default_timeout=settings.SCHEDULER_DEFAULT_TIMEOUT,
+        rule_engine=rule_engine,
+    )
+    await scheduler_service.initialize()
+
     # Store in app state for access
     app.state.action_registry = action_registry
     app.state.action_executor = action_executor
@@ -138,10 +149,12 @@ async def lifespan(app: FastAPI):
     app.state.rule_engine = rule_engine
     app.state.rule_storage = rule_storage
     app.state.event_emitter = event_emitter
+    app.state.scheduler_service = scheduler_service
 
     yield
 
     # === Shutdown ===
+    await scheduler_service.shutdown()
     await engine.dispose()
     logger.info("Database engine disposed")
 

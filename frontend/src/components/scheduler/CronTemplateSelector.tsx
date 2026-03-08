@@ -11,6 +11,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { useTranslations } from "next-intl";
 import type { CronTemplate, CronTemplateSelectorProps, IntervalUnit, Frequency, IntervalTemplate, SpecificTemplate } from "./CronTemplateSelector.types";
 
 export function CronTemplateSelector({
@@ -19,6 +20,7 @@ export function CronTemplateSelector({
   disabled = false,
   error,
 }: CronTemplateSelectorProps) {
+  const t = useTranslations("scheduler");
   const [activeTab, setActiveTab] = React.useState<CronTemplate["type"]>(value.type);
 
   const handleTabChange = (newType: CronTemplate["type"]) => {
@@ -56,15 +58,15 @@ export function CronTemplateSelector({
     <div className="space-y-3">
       <Tabs value={activeTab} onValueChange={(v) => handleTabChange(v as CronTemplate["type"])}>
         <TabsList>
-          <TabsTrigger value="interval">Interval</TabsTrigger>
-          <TabsTrigger value="specific">Specific</TabsTrigger>
-          <TabsTrigger value="advanced">Advanced</TabsTrigger>
+          <TabsTrigger value="interval">{t("tabs.interval")}</TabsTrigger>
+          <TabsTrigger value="specific">{t("tabs.specific")}</TabsTrigger>
+          <TabsTrigger value="advanced">{t("tabs.advanced")}</TabsTrigger>
         </TabsList>
 
         <TabsContent value="interval" className="space-y-4 mt-4">
           <div className="flex items-end gap-2">
             <div className="flex-1">
-              <Label htmlFor="interval-value">Every</Label>
+              <Label htmlFor="interval-value">{t("interval.every")}</Label>
               <Input
                 id="interval-value"
                 type="number"
@@ -76,7 +78,7 @@ export function CronTemplateSelector({
               />
             </div>
             <div className="w-[140px]">
-              <Label htmlFor="interval-unit">Unit</Label>
+              <Label htmlFor="interval-unit">{t("interval.unit")}</Label>
               <Select
                 value={value.type === "interval" ? value.interval_unit : "hour"}
                 onValueChange={(v) => handleIntervalChange("interval_unit", v as IntervalUnit)}
@@ -86,52 +88,61 @@ export function CronTemplateSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="second">Second(s)</SelectItem>
-                  <SelectItem value="minute">Minute(s)</SelectItem>
-                  <SelectItem value="hour">Hour(s)</SelectItem>
-                  <SelectItem value="day">Day(s)</SelectItem>
+                  <SelectItem value="second">{t("interval.second")}</SelectItem>
+                  <SelectItem value="minute">{t("interval.minute")}</SelectItem>
+                  <SelectItem value="hour">{t("interval.hour")}</SelectItem>
+                  <SelectItem value="day">{t("interval.day")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
           </div>
           <p className="text-xs text-muted-foreground">
             {value.type === "interval" && (
-              <>
-                Runs every <strong>{value.interval_value} {value.interval_unit}{value.interval_value > 1 ? "s" : ""}</strong>
-              </>
+              t("interval.summary", {
+                value: value.interval_value,
+                unit: t(`interval.${value.interval_unit}`),
+                plural: value.interval_value > 1 ? "s" : ""
+              })
             )}
           </p>
         </TabsContent>
 
         <TabsContent value="specific" className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="frequency">Frequency</Label>
+            <Label htmlFor="frequency">{t("specific.frequency")}</Label>
             <Select
               value={value.type === "specific" ? value.frequency : "daily"}
               onValueChange={(v) => {
-                handleSpecificChange("frequency", v as Frequency);
-                // Reset dependent fields when frequency changes
-                if (v !== "weekly") handleSpecificChange("day_of_week", undefined);
-                if (v !== "monthly") handleSpecificChange("day_of_month", undefined);
-                if (v === "hourly") handleSpecificChange("time", undefined);
+                const freq = v as Frequency;
+                handleSpecificChange("frequency", freq);
+
+                // Use a functional update style if needed, but here we just send the new object
+                const nextValue: CronTemplate = {
+                  type: "specific",
+                  frequency: freq,
+                  time: freq === "hourly" ? undefined : (value.type === "specific" ? value.time : "00:00"),
+                  day_of_week: freq === "weekly" ? (value.type === "specific" ? value.day_of_week : 1) : undefined,
+                  day_of_month: freq === "monthly" ? (value.type === "specific" ? value.day_of_month : 1) : undefined,
+                };
+                onChange(nextValue);
               }}
               disabled={disabled}
             >
               <SelectTrigger id="frequency" className="mt-1.5">
-                <SelectValue />
+                <SelectValue placeholder={t("specific.frequency")} />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="hourly">Hourly</SelectItem>
-                <SelectItem value="daily">Daily</SelectItem>
-                <SelectItem value="weekly">Weekly</SelectItem>
-                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="hourly">{t("specific.hourly")}</SelectItem>
+                <SelectItem value="daily">{t("specific.daily")}</SelectItem>
+                <SelectItem value="weekly">{t("specific.weekly")}</SelectItem>
+                <SelectItem value="monthly">{t("specific.monthly")}</SelectItem>
               </SelectContent>
             </Select>
           </div>
 
           {value.type === "specific" && value.frequency !== "hourly" && (
             <div>
-              <Label htmlFor="specific-time">At time</Label>
+              <Label htmlFor="specific-time">{t("specific.atTime")}</Label>
               <Input
                 id="specific-time"
                 type="time"
@@ -145,7 +156,7 @@ export function CronTemplateSelector({
 
           {value.type === "specific" && value.frequency === "weekly" && (
             <div>
-              <Label htmlFor="day-of-week">Day of week</Label>
+              <Label htmlFor="day-of-week">{t("specific.dayOfWeek")}</Label>
               <Select
                 value={value.day_of_week?.toString() || "1"}
                 onValueChange={(v) => handleSpecificChange("day_of_week", parseInt(v))}
@@ -155,13 +166,13 @@ export function CronTemplateSelector({
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="1">Monday</SelectItem>
-                  <SelectItem value="2">Tuesday</SelectItem>
-                  <SelectItem value="3">Wednesday</SelectItem>
-                  <SelectItem value="4">Thursday</SelectItem>
-                  <SelectItem value="5">Friday</SelectItem>
-                  <SelectItem value="6">Saturday</SelectItem>
-                  <SelectItem value="0">Sunday</SelectItem>
+                  <SelectItem value="1">{t("days.1")}</SelectItem>
+                  <SelectItem value="2">{t("days.2")}</SelectItem>
+                  <SelectItem value="3">{t("days.3")}</SelectItem>
+                  <SelectItem value="4">{t("days.4")}</SelectItem>
+                  <SelectItem value="5">{t("days.5")}</SelectItem>
+                  <SelectItem value="6">{t("days.6")}</SelectItem>
+                  <SelectItem value="0">{t("days.0")}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -169,7 +180,7 @@ export function CronTemplateSelector({
 
           {value.type === "specific" && value.frequency === "monthly" && (
             <div>
-              <Label htmlFor="day-of-month">Day of month</Label>
+              <Label htmlFor="day-of-month">{t("specific.dayOfMonth")}</Label>
               <Input
                 id="day-of-month"
                 type="number"
@@ -185,27 +196,27 @@ export function CronTemplateSelector({
 
           {value.type === "specific" && (
             <p className="text-xs text-muted-foreground">
-              {value.frequency === "hourly" && "Runs every hour at minute 0"}
-              {value.frequency === "daily" && `Runs daily at ${value.time || "00:00"}`}
-              {value.frequency === "weekly" && `Runs on ${["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"][value.day_of_week ?? 1]} at ${value.time || "00:00"}`}
-              {value.frequency === "monthly" && `Runs on day ${value.day_of_month ?? 1} of each month at ${value.time || "00:00"}`}
+              {value.frequency === "hourly" && t("specific.summaryHourly")}
+              {value.frequency === "daily" && t("specific.summaryDaily", { time: value.time || "00:00" })}
+              {value.frequency === "weekly" && t("specific.summaryWeekly", { day: t(`days.${value.day_of_week ?? 1}`), time: value.time || "00:00" })}
+              {value.frequency === "monthly" && t("specific.summaryMonthly", { day: value.day_of_month ?? 1, time: value.time || "00:00" })}
             </p>
           )}
         </TabsContent>
 
         <TabsContent value="advanced" className="space-y-4 mt-4">
           <div>
-            <Label htmlFor="cron-expr">Cron expression</Label>
+            <Label htmlFor="cron-expr">{t("advanced.cronExpression")}</Label>
             <Input
               id="cron-expr"
               value={value.type === "advanced" ? value.advanced : ""}
               onChange={(e) => handleAdvancedChange(e.target.value)}
               disabled={disabled}
-              placeholder="0 * * * *"
+              placeholder={t("advanced.placeholder")}
               className="mt-1.5 font-mono"
             />
             <p className="text-xs text-muted-foreground mt-1.5">
-              Standard 5-field cron format: minute hour day month day-of-week
+              {t("advanced.help")}
             </p>
           </div>
         </TabsContent>

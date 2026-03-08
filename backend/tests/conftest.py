@@ -9,7 +9,7 @@ from sqlalchemy.pool import StaticPool
 
 # Set required environment variables for tests
 os.environ.setdefault("SECRET_KEY", "test_secret_key_for_testing")
-os.environ.setdefault("DATABASE_URL", "postgresql+asyncpg://test:test@localhost/test")
+os.environ.setdefault("DATABASE_URL", "sqlite:///test.db")
 os.environ.setdefault("ALGORITHM", "HS256")
 os.environ.setdefault("ACCESS_TOKEN_EXPIRE_MINUTES", "30")
 
@@ -33,7 +33,7 @@ test_engine = None
 TestSessionLocal = None
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 async def setup_test_db():
     """Set up test database for tests that need it.
 
@@ -43,14 +43,40 @@ async def setup_test_db():
 
     # Import models
     from app.models.scheduled_task import ScheduledTask, TaskExecution
-    from sqlalchemy import Table, Column, Integer, String, Text, Boolean, DateTime, ForeignKey, MetaData
+    from sqlalchemy import (
+        Table,
+        Column,
+        Integer,
+        String,
+        Text,
+        Boolean,
+        DateTime,
+        ForeignKey,
+        MetaData,
+    )
 
-    # Create engine
+    # Create engine for SQLite
     test_engine = create_async_engine(
         TEST_DATABASE_URL,
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
     )
+
+    # Mock scheduler_service to avoid real DB connection in lifespan
+    from unittest.mock import AsyncMock
+    from datetime import datetime
+
+    mock_scheduler = AsyncMock()
+    # Configure trigger_task_manually to return a plausible TaskExecution dict/object
+    mock_scheduler.trigger_task_manually.return_value = {
+        "id": 1,
+        "task_id": 1,
+        "status": "pending",
+        "started_at": datetime.now(),
+        "retry_count": 0,
+        "is_retry": False,
+    }
+    app.state.scheduler_service = mock_scheduler
 
     # Create session factory
     TestSessionLocal = async_sessionmaker(
@@ -61,26 +87,34 @@ async def setup_test_db():
 
     # Create tables (manually to handle JSONB -> Text conversion for SQLite)
     async with test_engine.begin() as conn:
+
         def create_tables(connection):
             # Create ScheduledTask table
             ScheduledTask.__table__.create(connection, checkfirst=True)
 
-            # Create TaskExecution table with Text instead of JSONB for SQLite compatibility
-            metadata = MetaData()
+            # Create TaskExecution table using the same metadata as ScheduledTask
+            metadata = ScheduledTask.metadata
             task_executions_table = Table(
-                'task_executions', metadata,
-                Column('id', Integer, primary_key=True),
-                Column('task_id', Integer, ForeignKey('scheduled_tasks.id', ondelete='CASCADE'), nullable=False),
-                Column('status', String(20), nullable=False),
-                Column('started_at', DateTime, nullable=False),
-                Column('completed_at', DateTime),
-                Column('duration_seconds', Integer),
-                Column('result_data', Text),  # Text instead of JSONB for SQLite
-                Column('error_message', Text),
-                Column('error_type', String(100)),
-                Column('retry_count', Integer, default=0),
-                Column('is_retry', Boolean, default=False),
-                Column('triggered_by', String(50)),
+                "task_executions",
+                metadata,
+                Column("id", Integer, primary_key=True),
+                Column(
+                    "task_id",
+                    Integer,
+                    ForeignKey("scheduled_tasks.id", ondelete="CASCADE"),
+                    nullable=False,
+                ),
+                Column("status", String(20), nullable=False),
+                Column("started_at", DateTime, nullable=False),
+                Column("completed_at", DateTime),
+                Column("duration_seconds", Integer),
+                Column("result_data", Text),  # Text instead of JSONB for SQLite
+                Column("error_message", Text),
+                Column("error_type", String(100)),
+                Column("retry_count", Integer, default=0),
+                Column("is_retry", Boolean, default=False),
+                Column("triggered_by", String(50)),
+                extend_existing=True,
             )
             task_executions_table.create(connection, checkfirst=True)
 

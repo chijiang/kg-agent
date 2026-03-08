@@ -41,7 +41,7 @@ interface RuleSchedulePanelProps {
 type TriggerMode = "event" | "scheduled" | "hybrid";
 
 export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) {
-  const t = useTranslations();
+  const t = useTranslations("scheduler.rulePanel");
   const isMountedRef = useRef(true);
 
   const [schedule, setSchedule] = React.useState<ScheduledTask | null>(null);
@@ -113,9 +113,9 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
         await scheduledTasksApi.deleteRuleSchedule(ruleId);
       }
       await loadSchedule();
-      toast.success(`Rule trigger mode updated to "${triggerMode}"`);
+      toast.success(t("messages.modeUpdated", { mode: triggerMode }));
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to update rule schedule");
+      toast.error(error.response?.data?.detail || t("messages.updateFailed"));
     } finally {
       if (isMountedRef.current) {
         setIsSaving(false);
@@ -124,16 +124,16 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
   };
 
   const handleDeleteSchedule = async () => {
-    if (!confirm("Are you sure you want to remove the scheduled trigger? The rule will only trigger on events.")) return;
+    if (!confirm(t("removeConfirm"))) return;
 
     setIsDeleting(true);
     try {
       await scheduledTasksApi.deleteRuleSchedule(ruleId);
       setTriggerMode("event");
       await loadSchedule();
-      toast.success("Scheduled trigger removed");
+      toast.success(t("messages.removeSuccess"));
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to remove schedule");
+      toast.error(error.response?.data?.detail || t("messages.removeFailed"));
     } finally {
       if (isMountedRef.current) {
         setIsDeleting(false);
@@ -147,10 +147,10 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
     setIsTriggering(true);
     try {
       await scheduledTasksApi.triggerSync(schedule.id);
-      toast.success("Rule execution triggered successfully");
+      toast.success(t("messages.triggerSuccess"));
       await loadHistory();
     } catch (error: any) {
-      toast.error(error.response?.data?.detail || "Failed to trigger rule execution");
+      toast.error(error.response?.data?.detail || t("messages.triggerFailed"));
     } finally {
       if (isMountedRef.current) {
         setIsTriggering(false);
@@ -195,9 +195,9 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle>Rule Trigger Configuration</CardTitle>
+              <CardTitle>{t("title")}</CardTitle>
               <CardDescription>
-                Configure how "{ruleName}" should be triggered
+                {t("description", { name: ruleName })}
               </CardDescription>
             </div>
             {schedule && (
@@ -212,14 +212,14 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
                 ) : (
                   <Play className="h-4 w-4" />
                 )}
-                Trigger Now
+                {t("triggerNow")}
               </Button>
             )}
           </div>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-3">
-            <Label htmlFor="trigger-mode">Trigger Mode</Label>
+            <Label htmlFor="trigger-mode">{t("modeLabel")}</Label>
             <Select
               value={triggerMode}
               onValueChange={(v) => setTriggerMode(v as TriggerMode)}
@@ -233,9 +233,9 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-4 w-4" />
                     <div>
-                      <div className="font-medium">Event-based</div>
+                      <div className="font-medium">{t("modes.event")}</div>
                       <div className="text-xs text-muted-foreground">
-                        Trigger when specific events occur
+                        {t("modes.eventDesc")}
                       </div>
                     </div>
                   </div>
@@ -244,9 +244,9 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
                   <div className="flex items-center gap-2">
                     <Calendar className="h-4 w-4" />
                     <div>
-                      <div className="font-medium">Scheduled</div>
+                      <div className="font-medium">{t("modes.scheduled")}</div>
                       <div className="text-xs text-muted-foreground">
-                        Trigger on a defined schedule
+                        {t("modes.scheduledDesc")}
                       </div>
                     </div>
                   </div>
@@ -258,7 +258,7 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
           {triggerMode === "scheduled" && (
             <>
               <div className="space-y-3">
-                <Label>Schedule Configuration</Label>
+                <Label>{t("configTitle")}</Label>
                 <CronTemplateSelector
                   value={cronTemplate}
                   onChange={setCronTemplate}
@@ -268,15 +268,15 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
 
               {schedule && (
                 <div className="text-xs text-muted-foreground">
-                  <p>Cron expression: <code className="bg-muted px-1.5 py-0.5 rounded">{schedule.cron_expression}</code></p>
-                  <p className="mt-1">Last updated: {formatDateTime(schedule.updated_at)}</p>
+                  <p>{useTranslations("scheduler.advanced")("cronExpression")}: <code className="bg-muted px-1.5 py-0.5 rounded">{schedule.cron_expression}</code></p>
+                  <p className="mt-1">{t("lastUpdated", { defaultValue: "Last updated" })}: {formatDateTime(schedule.updated_at)}</p>
                 </div>
               )}
 
               <div className="flex gap-2 pt-2">
                 <Button onClick={handleSave} disabled={isSaving}>
                   {isSaving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  {schedule ? "Update Schedule" : "Create Schedule"}
+                  {schedule ? t("updateSchedule") : t("createSchedule")}
                 </Button>
                 {schedule && (
                   <Button
@@ -285,7 +285,7 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
                     disabled={isDeleting}
                   >
                     {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Remove Schedule
+                    {t("removeSchedule")}
                   </Button>
                 )}
               </div>
@@ -295,8 +295,7 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
           {triggerMode === "event" && (
             <div className="rounded-lg border p-4 bg-muted/50">
               <p className="text-sm text-muted-foreground">
-                This rule will be triggered when specific events occur in the system.
-                Configure the event conditions in the rule definition.
+                {t("infoEvent")}
               </p>
               {schedule && (
                 <Button
@@ -306,7 +305,7 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
                   className="mt-3"
                 >
                   {isDeleting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                  Remove Existing Schedule
+                  {t("removeExisting")}
                 </Button>
               )}
             </div>
@@ -316,8 +315,8 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
 
       <Card>
         <CardHeader>
-          <CardTitle>Execution History</CardTitle>
-          <CardDescription>Recent rule executions</CardDescription>
+          <CardTitle>{t("historyTitle")}</CardTitle>
+          <CardDescription>{t("historyDesc")}</CardDescription>
         </CardHeader>
         <CardContent>
           {isLoadingHistory ? (
@@ -325,15 +324,15 @@ export function RuleSchedulePanel({ ruleId, ruleName }: RuleSchedulePanelProps) 
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
           ) : history.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-6">No execution history yet</p>
+            <p className="text-sm text-muted-foreground text-center py-6">{t("noHistory")}</p>
           ) : (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Started</TableHead>
-                  <TableHead>Duration</TableHead>
-                  <TableHead>Triggered By</TableHead>
+                  <TableHead>{t("table.status")}</TableHead>
+                  <TableHead>{t("table.started")}</TableHead>
+                  <TableHead>{t("table.duration")}</TableHead>
+                  <TableHead>{t("table.triggeredBy")}</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
