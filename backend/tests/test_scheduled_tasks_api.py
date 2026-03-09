@@ -1063,3 +1063,157 @@ async def test_update_enable_task_adds_scheduler_job(async_client: AsyncClient, 
 
     # Cleanup
     await repo.delete(created.id)
+
+
+# ============================================================================
+# Scheduler Service Unit Tests
+# These tests directly verify the reschedule_task_safely rollback logic
+# ============================================================================
+
+
+@pytest.mark.asyncio
+async def test_reschedule_task_safely_restores_old_job_on_failure():
+    """Unit test for reschedule_task_safely rollback behavior.
+
+    This test verifies that when scheduling a new job fails, the old job
+    is restored in the scheduler. It uses a real APScheduler to ensure
+    the restore logic actually works.
+
+    This is a unit test for the scheduler service, not the API endpoint.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from apscheduler.executors.asyncio import AsyncIOExecutor
+    from app.services.scheduler_service import SchedulerService, parse_cron_expression, _job_executor_wrapper
+    from app.models.scheduled_task import ScheduledTask
+
+    # Create a real scheduler
+    scheduler = AsyncIOScheduler()
+    scheduler.start()
+
+    try:
+        # Create a service instance
+        service = SchedulerService(
+            db_session_factory=lambda: None,  # Not used in this test
+            max_concurrent_tasks=1,
+            rule_engine=None,
+        )
+        service.scheduler = scheduler
+
+        # Create old and new tasks
+        old_task = ScheduledTask(
+            id=999,
+            task_type="sync",
+            task_name="Old Task",
+            target_id=1,
+            cron_expression="0 * * * *",  # Valid cron
+            is_enabled=True,
+        )
+
+        new_task_broken = ScheduledTask(
+            id=999,
+            task_type="sync",
+            task_name="New Broken Task",
+            target_id=1,
+            cron_expression="invalid cron expression that will cause failure",  # Invalid cron
+            is_enabled=True,
+        )
+
+        # First, successfully add the old job
+        trigger = parse_cron_expression(old_task.cron_expression, timezone="UTC")
+        scheduler.add_job(
+            func=_job_executor_wrapper,
+            trigger=trigger,
+            id="task_999",
+            args=[999],
+            name=old_task.task_name,
+        )
+
+        # Verify old job exists
+        assert scheduler.get_job("task_999") is not None
+        assert scheduler.get_job("task_999").name == "Old Task"
+
+        # Now try to reschedule with invalid cron (should fail and restore old job)
+        try:
+            await service.reschedule_task_safely(old_task, new_task_broken)
+            assert False, "Should have raised ValueError for invalid cron"
+        except ValueError:
+            pass  # Expected
+
+        # Verify old job was restored
+        restored_job = scheduler.get_job("task_999")
+        assert restored_job is not None, "Old job should be restored after failure"
+        assert restored_job.name == "Old Task", "Restored job should have old name"
+        # The trigger should still be the old valid one
+        assert restored_job.trigger is not None
+
+    finally:
+        scheduler.shutdown()
+
+
+@pytest.mark.asyncio
+async def test_reschedule_task_safely_succeeds_with_valid_cron():
+    """Unit test for reschedule_task_safely success path.
+
+    Verifies that with valid cron, the old job is replaced with the new one.
+    """
+    from apscheduler.schedulers.asyncio import AsyncIOScheduler
+    from app.services.scheduler_service import SchedulerService, parse_cron_expression, _job_executor_wrapper
+    from app.models.scheduled_task import ScheduledTask
+
+    # Create a real scheduler
+    scheduler = AsyncIOScheduler()
+    scheduler.start()
+
+    try:
+        # Create a service instance
+        service = SchedulerService(
+            db_session_factory=lambda: None,  # Not used in this test
+            max_concurrent_tasks=1,
+            rule_engine=None,
+        )
+        service.scheduler = scheduler
+
+        # Create old and new tasks
+        old_task = ScheduledTask(
+            id=998,
+            task_type="sync",
+            task_name="Old Task",
+            target_id=1,
+            cron_expression="0 * * * *",
+            is_enabled=True,
+        )
+
+        new_task = ScheduledTask(
+            id=998,
+            task_type="sync",
+            task_name="New Task",
+            target_id=1,
+            cron_expression="0 */2 * * *",  # Valid cron, different from old
+            is_enabled=True,
+        )
+
+        # First, add the old job
+        trigger = parse_cron_expression(old_task.cron_expression, timezone="UTC")
+        scheduler.add_job(
+            func=_job_executor_wrapper,
+            trigger=trigger,
+            id="task_998",
+            args=[998],
+            name=old_task.task_name,
+        )
+
+        # Verify old job exists
+        assert scheduler.get_job("task_998") is not None
+        assert scheduler.get_job("task_998").name == "Old Task"
+
+        # Reschedule with valid new cron (should succeed)
+        job_id = await service.reschedule_task_safely(old_task, new_task)
+
+        # Verify job was updated
+        updated_job = scheduler.get_job("task_998")
+        assert updated_job is not None
+        assert updated_job.name == "New Task"
+        assert job_id == "task_998"
+
+    finally:
+        scheduler.shutdown()

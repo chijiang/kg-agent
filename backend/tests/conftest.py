@@ -65,6 +65,7 @@ async def setup_test_db():
     # Mock scheduler_service to avoid real DB connection in lifespan
     from unittest.mock import AsyncMock, MagicMock
     from datetime import datetime
+    from app.services.scheduler_service import parse_cron_expression
 
     # Create a fake scheduler class with explicit sync/async methods
     class FakeSchedulerService:
@@ -77,9 +78,17 @@ async def setup_test_db():
                 "retry_count": 0,
                 "is_retry": False,
             })
-            self.validate_task_schedule = MagicMock()
+            # validate_task_schedule uses real cron validation logic
+            self.validate_task_schedule = self._real_validate_task_schedule
             self.reschedule_task_safely = AsyncMock()
             self.unschedule_task = AsyncMock()
+
+        def _real_validate_task_schedule(self, task):
+            """Real validation using the actual parse_cron_expression function."""
+            try:
+                parse_cron_expression(task.cron_expression, timezone="UTC")
+            except Exception as e:
+                raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
 
     app.state.scheduler_service = FakeSchedulerService()
 
