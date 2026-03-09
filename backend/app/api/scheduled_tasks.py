@@ -154,7 +154,7 @@ async def update_scheduled_task(
 
     repo = ScheduledTaskRepository(db)
 
-    # Get current task for rollback and to check existence
+    # Get current task for validation
     current_task = await repo.get_by_id(task_id)
     if not current_task:
         raise HTTPException(
@@ -162,22 +162,37 @@ async def update_scheduled_task(
             detail=f"Task {task_id} not found",
         )
 
-    # Store original values for potential rollback
-    original_values = {}
-    for key in update_data.keys():
-        original_values[key] = getattr(current_task, key, None)
+    scheduler_service = request.app.state.scheduler_service
 
-    # Validate cron expression if provided (before DB update)
-    if "cron_expression" in update_data:
+    # Build a temporary task object to validate the new configuration
+    # This validates that the new config CAN be scheduled before we modify anything
+    if update_data:
+        # Create a merged task with current values + updates for validation
+        from app.models.scheduled_task import ScheduledTask as ScheduledTaskModel
+        temp_task = ScheduledTaskModel(
+            id=task_id,
+            task_type=current_task.task_type,
+            task_name=update_data.get("task_name", current_task.task_name),
+            target_id=current_task.target_id,
+            cron_expression=update_data.get("cron_expression", current_task.cron_expression),
+            is_enabled=update_data.get("is_enabled", current_task.is_enabled),
+            timeout_seconds=update_data.get("timeout_seconds", current_task.timeout_seconds),
+            max_retries=update_data.get("max_retries", current_task.max_retries),
+            retry_interval_seconds=update_data.get("retry_interval_seconds", current_task.retry_interval_seconds),
+            priority=update_data.get("priority", current_task.priority),
+            description=update_data.get("description", current_task.description),
+        )
+
+        # Validate the new configuration can be scheduled (before DB update)
         try:
-            parse_cron_expression(update_data["cron_expression"])
+            scheduler_service.validate_task_schedule(temp_task)
         except ValueError as e:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Invalid cron expression: {e}",
+                detail=f"Invalid task configuration: {e}",
             )
 
-    # Update in database
+    # Update in database (only after validation passes)
     task = await repo.update(task_id, update_data)
 
     if not task:
@@ -186,26 +201,27 @@ async def update_scheduled_task(
             detail=f"Task {task_id} not found",
         )
 
-    # Reschedule the task - if this fails, rollback the DB update
-    scheduler_service = request.app.state.scheduler_service
+    # Reschedule the task with the validated configuration
+    # Since validation passed, this should succeed; if it fails for unexpected reasons,
+    # the DB still has the new value (the task is "valid" but scheduling had a transient failure)
     try:
         if task.is_enabled:
             await scheduler_service.reschedule_task(task)
         else:
             await scheduler_service.unschedule_task(task_id)
-    except (ValueError, Exception) as e:
-        # Rollback database update on scheduling failure
-        await repo.update(task_id, original_values)
-        if isinstance(e, ValueError):
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to reschedule task: {e}",
-            )
-        else:
-            raise HTTPException(
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                detail=f"Failed to reschedule task: {e}",
-            )
+    except Exception as e:
+        # Log the error but don't rollback - the task configuration is valid
+        # The scheduler will retry on next restart, or admin can manually retry
+        import logging
+        logger = logging.getLogger(__name__)
+        logger.error(
+            f"Task {task_id} was updated in database but failed to reschedule: {e}. "
+            f"Task configuration is valid - this may be a transient scheduler issue."
+        )
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Task updated but failed to reschedule: {e}",
+        )
 
     return task
 

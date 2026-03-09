@@ -313,6 +313,27 @@ class SchedulerService:
         # Schedule with new configuration
         return await self._schedule_task(task)
 
+    def validate_task_schedule(self, task: ScheduledTask) -> None:
+        """Validate that a task can be scheduled without actually scheduling it.
+
+        This method checks if the cron expression is valid and the task
+        configuration is acceptable for scheduling.
+
+        Args:
+            task: The ScheduledTask to validate
+
+        Raises:
+            ValueError: If the task cannot be scheduled
+        """
+        if not task.is_enabled:
+            raise ValueError(f"Task {task.id} is disabled and cannot be scheduled")
+
+        # Validate cron expression by attempting to create a trigger
+        try:
+            parse_cron_expression(task.cron_expression, timezone="UTC")
+        except Exception as e:
+            raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
+
     async def _execute_scheduled_task(self, task_id: int) -> None:
         """Execute a scheduled task.
 
