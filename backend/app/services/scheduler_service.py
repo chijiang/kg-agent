@@ -29,6 +29,58 @@ logger = logging.getLogger(__name__)
 _global_scheduler_instance: Optional["SchedulerService"] = None
 
 
+def _parse_cron_expression(cron_expr: str, timezone: str = "UTC") -> CronTrigger:
+    """Parse cron expression supporting 5, 6, or 7 parts.
+
+    Args:
+        cron_expr: Cron expression string
+        timezone: Timezone for the trigger
+
+    Returns:
+        CronTrigger instance
+
+    Supported formats:
+        5 parts: minute hour day month weekday (standard cron)
+        6 parts: second minute hour day month weekday
+        7 parts: second minute hour day month weekday year
+    """
+    parts = cron_expr.strip().split()
+    num_parts = len(parts)
+
+    if num_parts == 5:
+        # Standard cron: minute hour day month weekday
+        return CronTrigger.from_crontab(cron_expr, timezone=timezone)
+    elif num_parts == 6:
+        # With seconds: second minute hour day month weekday
+        second, minute, hour, day, month, day_of_week = parts
+        return CronTrigger(
+            second=second,
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+            timezone=timezone,
+        )
+    elif num_parts == 7:
+        # With year: second minute hour day month weekday year
+        second, minute, hour, day, month, day_of_week, year = parts
+        return CronTrigger(
+            second=second,
+            minute=minute,
+            hour=hour,
+            day=day,
+            month=month,
+            day_of_week=day_of_week,
+            year=year,
+            timezone=timezone,
+        )
+    else:
+        raise ValueError(
+            f"Cron expression must have 5-7 parts, got {num_parts}: {cron_expr}"
+        )
+
+
 async def _job_executor_wrapper(task_id: int) -> None:
     """Standalone wrapper function for APScheduler jobs to avoid instance pickling issues.
 
@@ -193,8 +245,12 @@ class SchedulerService:
             self.scheduler.remove_job(job_id)
 
         # Create cron trigger from cron expression
+        # Support 5, 6, or 7 part cron expressions:
+        # 5 parts: minute hour day month weekday
+        # 6 parts: second minute hour day month weekday
+        # 7 parts: second minute hour day month weekday year
         try:
-            trigger = CronTrigger.from_crontab(task.cron_expression, timezone="UTC")
+            trigger = _parse_cron_expression(task.cron_expression, timezone="UTC")
         except Exception as e:
             raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
 

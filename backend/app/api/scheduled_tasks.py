@@ -328,7 +328,7 @@ async def validate_cron_expression(request: CronValidationRequest):
     """Validate a cron expression."""
     try:
         parts = request.cron_expression.strip().split()
-        is_valid = len(parts) == 5
+        is_valid = len(parts) in (5, 6, 7)
 
         if is_valid:
             return CronValidationResponse(
@@ -339,7 +339,7 @@ async def validate_cron_expression(request: CronValidationRequest):
         else:
             return CronValidationResponse(
                 is_valid=False,
-                message=f"Cron expression must have exactly 5 parts (minute hour day month weekday), got {len(parts)}",
+                message=f"Cron expression must have 5-7 parts (second minute hour day month weekday [year]), got {len(parts)}",
                 next_run_times=None,
             )
     except Exception as e:
