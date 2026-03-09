@@ -138,13 +138,21 @@ async def execute_action(
     Raises:
         HTTPException: If action is not found or user lacks permission
     """
-    # 检查权限
-    has_permission = await PermissionService.check_action_permission(
+    # 检查权限 - 同时需要 action 权限和实体访问权限
+    has_action_permission = await PermissionService.check_action_permission(
         db, current_user, entity_type, action_name
     )
-    if not has_permission:
+    if not has_action_permission:
         raise HTTPException(
             status_code=403, detail="No permission to execute this action"
+        )
+
+    has_entity_permission = await PermissionService.check_entity_access(
+        db, current_user, entity_type
+    )
+    if not has_entity_permission:
+        raise HTTPException(
+            status_code=403, detail=f"No permission to access entity type '{entity_type}'"
         )
     # Create evaluation context
     # Build entity dict with id and data
