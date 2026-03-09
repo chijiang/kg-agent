@@ -164,9 +164,12 @@ async def update_scheduled_task(
 
     scheduler_service = request.app.state.scheduler_service
 
-    # Build a temporary task object to validate the new configuration
-    # This validates that the new config CAN be scheduled before we modify anything
-    if update_data:
+    # Determine the new enabled state after update
+    new_is_enabled = update_data.get("is_enabled", current_task.is_enabled)
+
+    # Only validate schedule if the task will be enabled
+    # For disabled tasks, we only need to validate cron format
+    if new_is_enabled or "cron_expression" in update_data:
         # Create a merged task with current values + updates for validation
         from app.models.scheduled_task import ScheduledTask as ScheduledTaskModel
         temp_task = ScheduledTaskModel(
@@ -175,7 +178,7 @@ async def update_scheduled_task(
             task_name=update_data.get("task_name", current_task.task_name),
             target_id=current_task.target_id,
             cron_expression=update_data.get("cron_expression", current_task.cron_expression),
-            is_enabled=update_data.get("is_enabled", current_task.is_enabled),
+            is_enabled=new_is_enabled,
             timeout_seconds=update_data.get("timeout_seconds", current_task.timeout_seconds),
             max_retries=update_data.get("max_retries", current_task.max_retries),
             retry_interval_seconds=update_data.get("retry_interval_seconds", current_task.retry_interval_seconds),
@@ -183,7 +186,7 @@ async def update_scheduled_task(
             description=update_data.get("description", current_task.description),
         )
 
-        # Validate the new configuration can be scheduled (before DB update)
+        # Validate the configuration (before DB update)
         try:
             scheduler_service.validate_task_schedule(temp_task)
         except ValueError as e:
@@ -202,25 +205,26 @@ async def update_scheduled_task(
         )
 
     # Reschedule the task with the validated configuration
-    # Since validation passed, this should succeed; if it fails for unexpected reasons,
-    # the DB still has the new value (the task is "valid" but scheduling had a transient failure)
     try:
         if task.is_enabled:
             await scheduler_service.reschedule_task(task)
         else:
             await scheduler_service.unschedule_task(task_id)
     except Exception as e:
-        # Log the error but don't rollback - the task configuration is valid
-        # The scheduler will retry on next restart, or admin can manually retry
-        import logging
+        # If rescheduling fails, we need to rollback the database update
+        # to maintain consistency between DB and scheduler
         logger = logging.getLogger(__name__)
-        logger.error(
-            f"Task {task_id} was updated in database but failed to reschedule: {e}. "
-            f"Task configuration is valid - this may be a transient scheduler issue."
-        )
+        logger.error(f"Failed to reschedule task {task_id}: {e}")
+
+        # Rollback database update to original values
+        original_values = {}
+        for key in update_data.keys():
+            original_values[key] = getattr(current_task, key, None)
+        await repo.update(task_id, original_values)
+
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Task updated but failed to reschedule: {e}",
+            detail=f"Failed to reschedule task: {e}",
         )
 
     return task

@@ -63,7 +63,7 @@ async def setup_test_db():
     )
 
     # Mock scheduler_service to avoid real DB connection in lifespan
-    from unittest.mock import AsyncMock
+    from unittest.mock import AsyncMock, MagicMock
     from datetime import datetime
 
     mock_scheduler = AsyncMock()
@@ -76,6 +76,8 @@ async def setup_test_db():
         "retry_count": 0,
         "is_retry": False,
     }
+    # Make validate_task_schedule work as a sync method (not async)
+    mock_scheduler.validate_task_schedule = MagicMock()
     app.state.scheduler_service = mock_scheduler
 
     # Create session factory

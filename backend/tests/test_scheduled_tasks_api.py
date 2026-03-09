@@ -845,3 +845,76 @@ async def test_update_valid_cron_succeeds(async_client: AsyncClient, admin_heade
     assert response.status_code == 200
     data = response.json()
     assert data["cron_expression"] == new_cron
+
+
+@pytest.mark.asyncio
+async def test_update_task_disable_enabled_task(async_client: AsyncClient, admin_headers, sample_task: ScheduledTask):
+    """Test that disabling an enabled task succeeds."""
+    # sample_task is created with is_enabled=True
+    response = await async_client.put(
+        f"/api/scheduled-tasks/{sample_task.id}",
+        json={"is_enabled": False},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_enabled"] is False
+
+
+@pytest.mark.asyncio
+async def test_update_task_enable_disabled_task(async_client: AsyncClient, admin_headers, db: AsyncSession):
+    """Test that enabling a disabled task with valid cron succeeds."""
+    # Create a disabled task
+    repo = ScheduledTaskRepository(db)
+    from app.models.scheduled_task import ScheduledTask
+    task = ScheduledTask(
+        task_type="sync",
+        task_name="Disabled Task",
+        target_id=8888,
+        cron_expression="0 * * * *",
+        is_enabled=False,
+    )
+    created = await repo.create(task)
+
+    # Enable it
+    response = await async_client.put(
+        f"/api/scheduled-tasks/{created.id}",
+        json={"is_enabled": True},
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["is_enabled"] is True
+
+    # Cleanup
+    await repo.delete(created.id)
+
+
+@pytest.mark.asyncio
+async def test_update_task_with_invalid_cron_on_disabled_task(async_client: AsyncClient, admin_headers, db: AsyncSession):
+    """Test that updating a disabled task with invalid cron still validates cron format."""
+    # Create a disabled task
+    repo = ScheduledTaskRepository(db)
+    from app.models.scheduled_task import ScheduledTask
+    task = ScheduledTask(
+        task_type="sync",
+        task_name="Disabled Task",
+        target_id=8889,
+        cron_expression="0 * * * *",
+        is_enabled=False,
+    )
+    created = await repo.create(task)
+
+    # Try to update with invalid cron - should still be rejected
+    response = await async_client.put(
+        f"/api/scheduled-tasks/{created.id}",
+        json={"cron_expression": "99 * * * *"},  # Invalid minute
+    )
+    assert response.status_code == 400  # Bad Request
+
+    # Verify the task was NOT updated
+    get_response = await async_client.get(f"/api/scheduled-tasks/{created.id}")
+    assert get_response.status_code == 200
+    data = get_response.json()
+    assert data["cron_expression"] == "0 * * * *"  # Should be unchanged
+
+    # Cleanup
+    await repo.delete(created.id)

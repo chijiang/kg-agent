@@ -314,25 +314,31 @@ class SchedulerService:
         return await self._schedule_task(task)
 
     def validate_task_schedule(self, task: ScheduledTask) -> None:
-        """Validate that a task can be scheduled without actually scheduling it.
+        """Validate that a task configuration is valid for scheduling.
 
-        This method checks if the cron expression is valid and the task
-        configuration is acceptable for scheduling.
+        This method checks if the cron expression is valid. For disabled tasks,
+        only the cron expression is validated (the task won't be scheduled).
 
         Args:
             task: The ScheduledTask to validate
 
         Raises:
-            ValueError: If the task cannot be scheduled
+            ValueError: If the task configuration is invalid
         """
-        if not task.is_enabled:
-            raise ValueError(f"Task {task.id} is disabled and cannot be scheduled")
-
-        # Validate cron expression by attempting to create a trigger
-        try:
-            parse_cron_expression(task.cron_expression, timezone="UTC")
-        except Exception as e:
-            raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
+        # For disabled tasks, only validate cron expression format
+        # For enabled tasks, also verify they can be scheduled
+        if task.is_enabled:
+            # Validate cron expression by attempting to create a trigger
+            try:
+                parse_cron_expression(task.cron_expression, timezone="UTC")
+            except Exception as e:
+                raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
+        else:
+            # For disabled tasks, just validate the cron format without scheduling
+            try:
+                parse_cron_expression(task.cron_expression, timezone="UTC")
+            except Exception as e:
+                raise ValueError(f"Invalid cron expression '{task.cron_expression}': {e}")
 
     async def _execute_scheduled_task(self, task_id: int) -> None:
         """Execute a scheduled task.
